@@ -2,6 +2,7 @@ import time
 import logging
 from typing import Dict, Any, Optional, List
 from django.utils import timezone
+from django.conf import settings
 from core.models import Application, SessionHistory, UsageMeter, PlatformConfig
 from tools.models import RegisteredTool
 from tools.validator import ToolValidator
@@ -30,6 +31,7 @@ class AgentBrain:
         session_id: str,
         user_message: str,
         service_key: str = "",
+        passphrase: str = "",
         is_voice: bool = True
     ) -> Dict[str, Any]:
         """
@@ -63,11 +65,42 @@ class AgentBrain:
                 quota_status=quota_status
             )
 
-        # 1. Retrieve Recent Short-Term History
-        recent_history = SessionHistory.objects.filter(
+        # Fix #18: Check end-user passphrase verification if configured
+        if client_user_id:
+            from core.models import EndUserConfig
+            import hashlib
+            user_cfg = EndUserConfig.objects.filter(
+                application=self.application,
+                client_user_id=client_user_id
+            ).first()
+            if user_cfg and user_cfg.passphrase_hash:
+                input_hash = hashlib.sha256((passphrase or '').strip().encode('utf-8')).hexdigest()
+                if input_hash != user_cfg.passphrase_hash:
+                    return {
+                        'reply_speech': "Voice passphrase verification failed. Please speak your verified security passphrase to authorize actions.",
+                        'error': 'PASSPHRASE_VERIFICATION_FAILED',
+                        'tool_executed': None,
+                        'tool_result': None,
+                        'event': {'type': 'auth_error', 'message': 'Invalid vocal passphrase'},
+                        'units_deducted': 0,
+                        'units_remaining': meter.get_quota_status(platform_config)['units_remaining'],
+                        'grace_buffer_active': False,
+                        'latencies': {'total_ms': int((time.time() - start_time) * 1000)},
+                        'session_id': session_id
+                    }
+
+        # 1. Retrieve Recent Short-Term History (Fix #12: newest 10 in chronological order)
+        recent_history = list(SessionHistory.objects.filter(
             application=self.application,
             session_id=session_id
-        ).order_by('created_at')[:10]
+        ).order_by('-created_at')[:10])
+        recent_history.reverse()
+
+        # Fix #24: Respect session timeout setting; expire context if inactive too long
+        timeout_minutes = getattr(settings, 'T_AT_S', {}).get('DEFAULT_SESSION_TIMEOUT_MINUTES', 30)
+        from datetime import timedelta
+        if recent_history and (timezone.now() - recent_history[-1].created_at > timedelta(minutes=timeout_minutes)):
+            recent_history = []
 
         messages: List[Dict[str, Any]] = []
 
@@ -96,8 +129,9 @@ class AgentBrain:
         llm_start = time.time()
         llm_res = self.groq_client.chat_completion(messages=messages, tools=function_schemas)
 
-        if not llm_res.get('success') and not self.groq_client.api_key:
-            # Fallback to local Ollama if Groq is unconfigured
+        if not llm_res.get('success'):
+            # Fix #22: Fallback to local Ollama if Groq fails or is unconfigured
+            logger.warning(f"Groq primary completion failed ({llm_res.get('error')}). Falling back to local Ollama.")
             llm_res = self.ollama_client.chat_completion(messages=messages, tools=function_schemas)
 
         latencies['llm_ms'] = int((time.time() - llm_start) * 1000)
@@ -107,51 +141,71 @@ class AgentBrain:
         client_event = None
         spoken_reply = ""
 
-        # 4. Handle Tool Calling If Detected
+        # 4. Handle Tool Calling If Detected (Fix #23: support multi-step tool calls)
         tool_calls = llm_res.get('tool_calls')
+        executed_tools = []
+        last_dispatch_res = None
+        last_event = None
+        api_latencies = []
+
         if tool_calls and len(tool_calls) > 0:
-            first_call = tool_calls[0]
-            call_name = first_call.get('name')
-            raw_args = first_call.get('arguments', {})
+            for call in tool_calls:
+                call_name = call.get('name')
+                raw_args = call.get('arguments', {})
 
-            if call_name in tool_lookup:
-                matched_tool = tool_lookup[call_name]
-                tool_executed_name = call_name
+                if call_name in tool_lookup:
+                    matched_tool = tool_lookup[call_name]
+                    tool_executed_name = call_name
 
-                # Validate parameters
-                is_valid, cleaned_args, val_error = ToolValidator.validate_and_clean(
-                    tool_schema={'parameters_schema': matched_tool.parameters_schema},
-                    arguments=raw_args
-                )
-
-                if is_valid:
-                    # Dispatch HTTP call to developer application
-                    dispatch_res = ToolDispatcher.dispatch(
-                        tool=matched_tool,
-                        arguments=cleaned_args,
-                        client_user_id=client_user_id,
-                        service_key=service_key
+                    # Validate parameters
+                    is_valid, cleaned_args, val_error = ToolValidator.validate_and_clean(
+                        tool_schema={'parameters_schema': matched_tool.parameters_schema},
+                        arguments=raw_args
                     )
-                    tool_dispatch_result = dispatch_res
-                    latencies['api_ms'] = dispatch_res.get('latency_ms', 0)
 
-                    # Synthesize conversational spoken confirmation
-                    if dispatch_res.get('success'):
-                        spoken_reply = f"Done! Successfully executed {matched_tool.name.replace('_', ' ')}."
-                        client_event = {
-                            'type': f"{matched_tool.name}_completed",
-                            'data': dispatch_res.get('data', {}),
-                            'tool': matched_tool.name
-                        }
-                    else:
-                        spoken_reply = (
-                            f"I tried to execute {matched_tool.name.replace('_', ' ')}, "
-                            f"but your app is taking too long to respond. Please try again."
+                    if is_valid:
+                        # Dispatch HTTP call to developer application
+                        dispatch_res = ToolDispatcher.dispatch(
+                            tool=matched_tool,
+                            arguments=cleaned_args,
+                            client_user_id=client_user_id,
+                            service_key=service_key
                         )
+                        last_dispatch_res = dispatch_res
+                        api_latencies.append(dispatch_res.get('latency_ms', 0))
+
+                        if dispatch_res.get('success'):
+                            executed_tools.append(matched_tool.name)
+                            last_event = {
+                                'type': f"{matched_tool.name}_completed",
+                                'data': dispatch_res.get('data', {}),
+                                'tool': matched_tool.name
+                            }
+                        else:
+                            spoken_reply = (
+                                f"I tried to execute {matched_tool.name.replace('_', ' ')}, "
+                                f"but your app is taking too long to respond. Please try again."
+                            )
+                            break
+                    else:
+                        spoken_reply = f"I couldn't execute that action: {val_error}"
+                        break
                 else:
-                    spoken_reply = f"I couldn't execute that action: {val_error}"
-            else:
-                spoken_reply = f"Action '{call_name}' is not recognized for this application."
+                    spoken_reply = f"Action '{call_name}' is not recognized for this application."
+                    break
+
+            if executed_tools and not spoken_reply:
+                if len(executed_tools) == 1:
+                    spoken_reply = f"Done! Successfully executed {executed_tools[0].replace('_', ' ')}."
+                else:
+                    names_str = ", ".join(t.replace('_', ' ') for t in executed_tools)
+                    spoken_reply = f"Done! Successfully executed: {names_str}."
+
+            latencies['api_ms'] = sum(api_latencies)
+            tool_dispatch_result = last_dispatch_res
+            client_event = last_event
+            if executed_tools:
+                tool_executed_name = executed_tools[-1]
         else:
             # Standard conversational reply (no tool needed)
             spoken_reply = llm_res.get('content') or (

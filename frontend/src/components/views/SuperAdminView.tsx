@@ -2095,11 +2095,11 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
                 <ul className="text-[11px] text-[#57423D] space-y-1.5 list-none">
                   <li className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-[15px] text-[#A53B22]">check</span>
-                    <span><strong>Credit Rollover:</strong> Unspent monthly credits carry over without expiration</span>
+                    <span><strong>Annual Commitment:</strong> 2 full months free (~17% immediate savings)</span>
                   </li>
                   <li className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-[15px] text-[#A53B22]">check</span>
-                    <span><strong>Voice Clones:</strong> 3 Neural Voice Clone slots included (vs 1 on monthly)</span>
+                    <span><strong>Studio Voices:</strong> Curated Studio Voice Library Access included</span>
                   </li>
                   <li className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-[15px] text-[#A53B22]">check</span>

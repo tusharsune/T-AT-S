@@ -10,7 +10,7 @@ class GroqLLMClient:
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         t_settings = getattr(settings, 'T_AT_S', {})
         self.api_key = api_key or t_settings.get('GROQ_API_KEY') or os.getenv('GROQ_API_KEY', '')
-        self.model = model or os.getenv('GROQ_MODEL') or t_settings.get('DEFAULT_MODEL', 'openai/gpt-oss-120b')
+        self.model = model or os.getenv('GROQ_MODEL') or t_settings.get('DEFAULT_MODEL', 'llama-3.3-70b-versatile')
         self._client = None
 
     @property
@@ -43,7 +43,7 @@ class GroqLLMClient:
                 'tool_calls': None
             }
 
-        models_to_try = list(dict.fromkeys([self.model, 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'llama-3.3-70b-versatile']))
+        models_to_try = list(dict.fromkeys([self.model, 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.1-70b-versatile']))
 
         last_error = "Unknown error"
         for candidate_model in models_to_try:

@@ -11,17 +11,24 @@ class ApplicationRateThrottle(SimpleRateThrottle):
         app = getattr(request, 'application', None)
         if app:
             return f"throttle_app_{app.id}"
-        # Fallback to IP if unauthenticated
-        return self.get_ident(request)
+        return None
 
     def get_rate(self):
-        # We can dynamically vary rate based on application's plan_tier
+        # Fix #20 (PDF): Dynamically vary rate limit based on application's plan tier
+        request = getattr(self, 'request', None)
+        app = getattr(request, 'application', None) if request else None
+        if app:
+            tier = getattr(app, 'get_effective_plan_tier', lambda: getattr(app, 'plan_tier', 'FREE'))().upper()
+            if tier == 'ENTERPRISE':
+                return '600/minute'
+            elif tier in ['GROWTH', 'STARTER']:
+                return '300/minute'
         return '60/minute'
 
 
 class BurstRateThrottle(SimpleRateThrottle):
     """
-    Burst protection: Prevents infinite loops / flood attacks.
+    Burst protection: Prevents infinite loops / flood attacks on application clusters.
     Limits to 10 requests per second.
     """
     scope = 'burst'
@@ -30,7 +37,8 @@ class BurstRateThrottle(SimpleRateThrottle):
         app = getattr(request, 'application', None)
         if app:
             return f"throttle_burst_{app.id}"
-        return self.get_ident(request)
+        return None
+
 
     def get_rate(self):
         return '10/second'

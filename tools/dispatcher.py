@@ -47,10 +47,13 @@ class ToolDispatcher:
                     res = requests.get(full_url, params=arguments, headers=headers, timeout=timeout)
                 elif method == 'PUT':
                     res = requests.put(full_url, json=arguments, headers=headers, timeout=timeout)
+                elif method == 'PATCH':
+                    res = requests.patch(full_url, json=arguments, headers=headers, timeout=timeout)
                 elif method == 'DELETE':
                     res = requests.delete(full_url, json=arguments, headers=headers, timeout=timeout)
                 else:
                     res = requests.post(full_url, json=arguments, headers=headers, timeout=timeout)
+
 
                 status_code = res.status_code
                 latency_ms = int((time.time() - start_time) * 1000)

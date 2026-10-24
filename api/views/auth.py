@@ -627,7 +627,7 @@ class DeveloperChangePasswordView(APIView):
             developer=dev,
             title="Password Changed",
             message="Your account password was successfully updated from Developer Settings.",
-            notification_type='SYSTEM'
+            notification_type='INFO'
         )
 
         return Response({'message': 'Password changed successfully.'}, status=status.HTTP_200_OK)

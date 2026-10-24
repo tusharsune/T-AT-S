@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppView } from '../types';
 import { TATSBackendAPI } from '../services/api';
+import { TASLogoIcon } from './TASLogo';
 
 interface HeaderProps {
   currentView: AppView;
@@ -163,27 +164,50 @@ const response = await agent.executeVoice(audioStream);`
     }, 300);
   };
 
+  const scrollToAnchor = (anchorId: string) => {
+    if (currentView !== 'landing') {
+      onNavigate('landing');
+      setTimeout(() => {
+        const el = document.getElementById(anchorId);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else {
+      const el = document.getElementById(anchorId);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-[#FFFFFF]/85 backdrop-blur-xl border-b border-[#FFE6DC]/60 shadow-[0_1px_8px_rgba(30,27,36,0.03)]">
       <div className="h-16 w-full px-4 sm:px-6 flex items-center justify-between gap-4">
         {/* Brand Zone */}
-        <div className="flex items-center gap-3 min-w-max">
-          <button
-            onClick={() => onNavigate(developer ? 'developer-dashboard' : 'landing')}
-            className="flex items-center gap-3 text-left group focus:outline-none"
+        <div className="flex items-center min-w-max">
+          <a
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate(developer ? 'developer-dashboard' : 'landing');
+            }}
+            aria-label="T@S home"
+            className="group flex items-center gap-[12px] text-left focus:outline-none transition-transform duration-200 ease-out hover:scale-[1.04] motion-reduce:hover:scale-100"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#FF7E5F] via-[#FF5F45] to-[#FFAE33] flex items-center justify-center text-white shadow-[0_2px_10px_rgba(255,95,69,0.25)] group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-[20px]">graphic_eq</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-['Outfit'] font-bold text-xl tracking-tight text-[#1D1A23]">
-                T@S
+            <img
+              src="/tas_final_logo_mark_small.svg"
+              alt=""
+              className="h-[36px] md:h-[44px] w-auto aspect-square shrink-0 select-none object-contain"
+            />
+            <div className="flex flex-col justify-center leading-none select-none">
+              <span className="font-['Plus_Jakarta_Sans',Outfit,sans-serif] font-extrabold text-[20px] md:text-[22px] tracking-[0.12em] text-[#1a1520] leading-none">
+                T<span className="text-[#ff6b4a]">@</span>S
+              </span>
+              <span className="font-['Plus_Jakarta_Sans',Outfit,sans-serif] text-[9px] md:text-[9.5px] uppercase font-semibold tracking-[0.2em] text-[#6b6470] leading-none mt-1">
+                TALK · DECIDE · SOLVE
               </span>
             </div>
-          </button>
+          </a>
         </div>
 
-        {/* Header Center: Command Search when Logged-in */}
+        {/* Header Center: Command Search when Logged-in / Clean Anchor Nav on Landing */}
         {developer && currentView !== 'landing' ? (
           <div className="hidden md:flex items-center flex-1 max-w-xs lg:max-w-md mx-2">
             <button
@@ -200,8 +224,36 @@ const response = await agent.executeVoice(audioStream);`
             </button>
           </div>
         ) : (
-          <div className="flex-1" />
+          <div className="flex-1 flex justify-center">
+            <nav className="hidden md:flex items-center gap-1 sm:gap-2 px-3 py-1 rounded-full bg-[#FAF9F6]/80 border border-[#FFE6DC]/60 backdrop-blur-xs">
+              <button
+                onClick={() => scrollToAnchor('features')}
+                className="px-3 py-1 rounded-full text-xs font-semibold text-[#57423D] hover:text-[#A53B22] hover:bg-[#FFE6DC]/50 transition-all cursor-pointer"
+              >
+                Features
+              </button>
+              <button
+                onClick={() => scrollToAnchor('architecture')}
+                className="px-3 py-1 rounded-full text-xs font-semibold text-[#57423D] hover:text-[#A53B22] hover:bg-[#FFE6DC]/50 transition-all cursor-pointer"
+              >
+                Architecture
+              </button>
+              <button
+                onClick={() => scrollToAnchor('quickstart')}
+                className="px-3 py-1 rounded-full text-xs font-semibold text-[#57423D] hover:text-[#A53B22] hover:bg-[#FFE6DC]/50 transition-all cursor-pointer"
+              >
+                API &amp; SDK
+              </button>
+              <button
+                onClick={() => scrollToAnchor('faq')}
+                className="px-3 py-1 rounded-full text-xs font-semibold text-[#57423D] hover:text-[#A53B22] hover:bg-[#FFE6DC]/50 transition-all cursor-pointer"
+              >
+                FAQ
+              </button>
+            </nav>
+          </div>
         )}
+
 
         {/* Status Indicators & Profile Controls */}
         <div className="flex items-center gap-2.5 sm:gap-3.5">

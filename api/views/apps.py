@@ -92,6 +92,10 @@ class ApplicationListCreateView(APIView):
                 'service_key': raw_service_key,
                 'created_at': app.created_at
             },
+            'credentials': {
+                'api_key': raw_api_key,
+                'service_key': raw_service_key
+            },
             'instructions': 'Use Bearer ' + raw_api_key + ' to authorize chat and tool endpoints. Use service_key in your backend middleware.'
         }, status=status.HTTP_201_CREATED)
 

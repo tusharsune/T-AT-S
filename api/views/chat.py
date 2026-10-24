@@ -39,14 +39,6 @@ class ChatExecutionView(APIView):
                     pass
 
             app = request.developer.applications.filter(is_active=True).first()
-            if not app:
-                from core.models import Application, APIKey
-                app = Application.objects.create(
-                    developer=request.developer,
-                    app_name="Default Workspace",
-                    base_url="https://api.tats.ai/v1"
-                )
-                APIKey.generate_for_app(app)
             return app
 
         return None
@@ -114,6 +106,7 @@ class ChatExecutionView(APIView):
                 session_id=data['session_id'],
                 user_message=data['message'],
                 service_key=request.headers.get('X-Service-Key', ''),
+                passphrase=data.get('passphrase', ''),
                 is_voice=data.get('is_voice', True)
             )
         except QuotaExceededError as qe:
@@ -128,6 +121,9 @@ class ChatExecutionView(APIView):
                 'error': 'EXECUTION_ERROR',
                 'message': str(ex)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if result.get('error') == 'PASSPHRASE_VERIFICATION_FAILED':
+            return Response(result, status=status.HTTP_403_FORBIDDEN)
 
         response = Response(result, status=status.HTTP_200_OK)
         if result.get('grace_buffer_active'):

@@ -514,17 +514,44 @@ export const ToolBuilderView: React.FC<ToolBuilderViewProps> = ({
         });
         onShowToast(`Trigger Dispatched (200 OK)`, `Spoken reply: "${replySpeech}" (${units} unit consumed)`);
         return;
+      } else if (chatRes && !chatRes.ok) {
+        // Fix #25: Do not silently fake 200 OK on backend failure
+        setIsExecuting(false);
+        const errStatus = chatRes.status ? `${chatRes.status} Error` : 'Execution Error';
+        const errMsg = (chatRes.data as any)?.message || (chatRes.data as any)?.error || (chatRes as any)?.error || 'Execution failed';
+        setResponseMock({
+          status: errStatus,
+          action: 'engine_intent_error',
+          endpoint: webhookUrl,
+          tool_name: activeToolName,
+          error: errMsg,
+          timestamp: new Date().toISOString()
+        });
+        onShowToast(`Trigger Failed (${errStatus})`, String(errMsg));
+        return;
       }
-    } catch {
-      // Fallback to sandbox simulation
+    } catch (err: any) {
+      if (apiKey) {
+        setIsExecuting(false);
+        setResponseMock({
+          status: 'Connection Error',
+          action: 'engine_unreachable',
+          endpoint: webhookUrl,
+          error: err?.message || 'Failed to connect to backend engine.',
+          timestamp: new Date().toISOString()
+        });
+        onShowToast('Connection Failed', 'Failed to reach T@S backend engine.');
+        return;
+      }
     }
 
+    // Only fallback to simulated sandbox preview when no API key is configured
     setTimeout(() => {
       setIsExecuting(false);
       const randomLatency = Math.floor(130 + Math.random() * 70);
       setResponseMock({
-        status: '200 OK',
-        action: 'sandbox_test_success',
+        status: 'Sandbox Preview',
+        action: 'sandbox_test_preview',
         endpoint: webhookUrl,
         sample_body: Object.keys(propertiesObj).reduce((acc: any, k) => {
           acc[k] = propertiesObj[k].type === 'number' ? 100 : 'sample_value';
@@ -533,7 +560,7 @@ export const ToolBuilderView: React.FC<ToolBuilderViewProps> = ({
         latency_ms: randomLatency,
         timestamp: new Date().toISOString()
       });
-      onShowToast('Test Trigger Dispatched', `Sandbox returned 200 OK in ${randomLatency}ms.`);
+      onShowToast('Sandbox Test Preview', `Simulated schema response in ${randomLatency}ms.`);
     }, 500);
   };
 

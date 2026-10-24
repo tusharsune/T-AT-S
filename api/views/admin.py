@@ -14,7 +14,8 @@ class AdminConfigView(APIView):
     Super Admin configuration endpoint.
     Retrieves or dynamically updates pricing tiers, unit quotas, and multipliers.
     """
-    permission_classes = [permissions.AllowAny]
+    authentication_classes = [DeveloperTokenAuthentication]
+    permission_classes = [IsDeveloperAuthenticated]
 
     @extend_schema(
         tags=['Super Admin Controls'],
@@ -23,6 +24,8 @@ class AdminConfigView(APIView):
         responses={200: PlatformConfigSerializer}
     )
     def get(self, request):
+        if not request.developer.is_admin:
+            return Response({'error': 'Unauthorized. Admin privileges required.'}, status=status.HTTP_403_FORBIDDEN)
         config = PlatformConfig.get_active()
         serializer = PlatformConfigSerializer(config)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -35,6 +38,8 @@ class AdminConfigView(APIView):
         responses={200: PlatformConfigSerializer}
     )
     def post(self, request):
+        if not request.developer.is_admin:
+            return Response({'error': 'Unauthorized. Admin privileges required.'}, status=status.HTTP_403_FORBIDDEN)
         config = PlatformConfig.get_active()
         data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
         if 'starter_price_inr' in data and 'growth_price_inr' not in data:
@@ -59,9 +64,12 @@ class AdminGovernanceDataView(APIView):
     Returns 100% REAL live database metrics, registered developers, active application clusters,
     usage metrics, and revenue.
     """
-    permission_classes = [permissions.AllowAny]
+    authentication_classes = [DeveloperTokenAuthentication]
+    permission_classes = [IsDeveloperAuthenticated]
 
     def get(self, request):
+        if not request.developer.is_admin:
+            return Response({'error': 'Unauthorized. Admin privileges required.'}, status=status.HTTP_403_FORBIDDEN)
         from django.db.models import Sum
         from core.models import Developer, Application, UsageMeter, PaymentOrder, EndUserConfig
 
@@ -161,9 +169,12 @@ class AdminDeveloperStatusView(APIView):
     """
     Allows Platform Administrator to toggle developer account status (Active / Suspended).
     """
-    permission_classes = [permissions.AllowAny]
+    authentication_classes = [DeveloperTokenAuthentication]
+    permission_classes = [IsDeveloperAuthenticated]
 
     def post(self, request, dev_id):
+        if not request.developer.is_admin:
+            return Response({'error': 'Unauthorized. Admin privileges required.'}, status=status.HTTP_403_FORBIDDEN)
         from core.models import Developer
         try:
             dev = Developer.objects.get(id=dev_id)
@@ -227,7 +238,7 @@ class AdminGovernanceSecurityView(APIView):
                 developer=dev,
                 title="Governance Security Updated",
                 message=f"Platform Governance verification check set to {method}.",
-                notification_type='SYSTEM'
+                notification_type='INFO'
             )
 
             return Response({
@@ -247,7 +258,7 @@ class AdminGovernanceSecurityView(APIView):
                 developer=dev,
                 title="Save Codes Regenerated",
                 message="A new set of 5 single-use emergency backup recovery codes was generated.",
-                notification_type='SYSTEM'
+                notification_type='INFO'
             )
 
             return Response({
@@ -278,7 +289,7 @@ class AdminGovernanceSecurityView(APIView):
                 developer=dev,
                 title="Admin Password Updated",
                 message="Your administrator credentials have been successfully updated from Accounts & Settings.",
-                notification_type='SYSTEM'
+                notification_type='INFO'
             )
 
             return Response({'message': 'Administrator password updated successfully.'}, status=status.HTTP_200_OK)
@@ -292,8 +303,13 @@ class AdminGovernanceUnlockView(APIView):
     - Master Password
     - 6-digit Email OTP
     - Single-use Save / Recovery Backup Code
+
+    Hardened with attempt-based brute-force lockout (Fix #6).
     """
     permission_classes = [permissions.AllowAny]
+
+    MAX_FAILED_ATTEMPTS = 5
+    LOCKOUT_SECONDS = 900  # 15 minutes
 
     def get(self, request):
         email = request.query_params.get('email', '').lower().strip()
@@ -309,6 +325,8 @@ class AdminGovernanceUnlockView(APIView):
         }, status=status.HTTP_200_OK)
 
     def post(self, request):
+        from django.core.cache import cache
+
         email = request.data.get('email', '').lower().strip()
         method = request.data.get('method', 'PASSWORD').upper()
         credential = request.data.get('credential', '').strip()
@@ -316,40 +334,74 @@ class AdminGovernanceUnlockView(APIView):
         if not email or not credential:
             return Response({'error': 'Email and verification credential are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Fix #6: Check for temporary brute-force lockout
+        lockout_key = f"gov_unlock_lockout:{email}"
+        attempts_key = f"gov_unlock_attempts:{email}"
+
+        if cache.get(lockout_key):
+            return Response({
+                'error': 'Too many failed unlock attempts. Platform Governance is locked for 15 minutes for security.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
         dev = Developer.objects.filter(email=email, is_admin=True).first()
         if not dev:
             return Response({'error': 'Administrator account not found or access denied.'}, status=status.HTTP_403_FORBIDDEN)
 
+        failed = False
+        error_msg = ''
+
         if method == 'PASSWORD':
             if not check_password(credential, dev.password):
-                return Response({'error': 'Incorrect administrator password.'}, status=status.HTTP_400_BAD_REQUEST)
+                failed = True
+                error_msg = 'Incorrect administrator password.'
 
         elif method == 'OTP':
             is_valid = EmailOTPVerification.verify_code(email=dev.email, raw_code=credential, purpose='LOGIN')
             if not is_valid:
                 is_valid = EmailOTPVerification.verify_code(email=dev.email, raw_code=credential, purpose='REGISTER')
             if not is_valid:
-                return Response({'error': 'Invalid or expired 6-digit verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+                failed = True
+                error_msg = 'Invalid or expired 6-digit verification code.'
 
         elif method in ['SAVE_CODES', 'SAVE_CODE']:
             clean_input = credential.strip().upper()
             save_codes = [c.upper() for c in (dev.governance_save_codes or [])]
             if clean_input not in save_codes:
-                return Response({'error': 'Invalid emergency save code. Please enter an unused valid backup code.'}, status=status.HTTP_400_BAD_REQUEST)
+                failed = True
+                error_msg = 'Invalid emergency save code. Please enter an unused valid backup code.'
+            else:
+                # Consume code (single-use)
+                updated_codes = [c for c in dev.governance_save_codes if c.upper() != clean_input]
+                dev.governance_save_codes = updated_codes
+                dev.save()
 
-            # Consume code (single-use)
-            updated_codes = [c for c in dev.governance_save_codes if c.upper() != clean_input]
-            dev.governance_save_codes = updated_codes
-            dev.save()
-
-            Notification.objects.create(
-                developer=dev,
-                title="Save Code Used",
-                message=f"An emergency save code was consumed to unlock Platform Governance. {len(updated_codes)} codes remaining.",
-                notification_type='WARNING'
-            )
+                Notification.objects.create(
+                    developer=dev,
+                    title="Save Code Used",
+                    message=f"An emergency save code was consumed to unlock Platform Governance. {len(updated_codes)} codes remaining.",
+                    notification_type='WARNING'
+                )
         else:
             return Response({'error': f"Unsupported verification method: {method}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if failed:
+            current_attempts = cache.get(attempts_key, 0) + 1
+            if current_attempts >= self.MAX_FAILED_ATTEMPTS:
+                cache.set(lockout_key, True, timeout=self.LOCKOUT_SECONDS)
+                cache.delete(attempts_key)
+                return Response({
+                    'error': 'Too many failed attempts. Platform Governance access locked for 15 minutes.'
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            else:
+                cache.set(attempts_key, current_attempts, timeout=self.LOCKOUT_SECONDS)
+                remaining = self.MAX_FAILED_ATTEMPTS - current_attempts
+                return Response({
+                    'error': f"{error_msg} ({remaining} attempt{'s' if remaining != 1 else ''} remaining before lockout)."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Unlock success — clear failed attempt counters
+        cache.delete(attempts_key)
+        cache.delete(lockout_key)
 
         return Response({
             'success': True,
@@ -369,13 +421,31 @@ class AdminGovernanceUnlockView(APIView):
 class AdminSendOTPView(APIView):
     """
     Sends a 6-digit OTP verification code to the Super Admin's email for governance unlock.
+    Includes rate-limiting cooldown and hourly cap to prevent flooding (Fix #6).
     """
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        from django.core.cache import cache
+
         email = request.data.get('email', '').lower().strip()
         if not email:
             return Response({'error': 'Admin email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Fix #6: Cooldown & flooding protection
+        cooldown_key = f"admin_otp_cooldown:{email}"
+        hourly_key = f"admin_otp_hourly:{email}"
+
+        if cache.get(cooldown_key):
+            return Response({
+                'error': 'Please wait 60 seconds before requesting another verification code.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        hourly_count = cache.get(hourly_key, 0)
+        if hourly_count >= 5:
+            return Response({
+                'error': 'Hourly OTP request limit reached. Please try again later.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
         admin = Developer.objects.filter(email=email, is_admin=True).first()
         if not admin:
@@ -383,9 +453,14 @@ class AdminSendOTPView(APIView):
 
         instance, raw_otp = EmailOTPVerification.create_and_send(email=admin.email, purpose='LOGIN')
 
+        # Set 60s cooldown and increment hourly count (3600s TTL)
+        cache.set(cooldown_key, True, timeout=60)
+        cache.set(hourly_key, hourly_count + 1, timeout=3600)
+
         return Response({
             'success': True,
             'message': f"A 6-digit verification code has been dispatched to {admin.email}.",
             'email': admin.email
         }, status=status.HTTP_200_OK)
+
 

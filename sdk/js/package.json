@@ -6,8 +6,11 @@
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "scripts": {
+    "build": "node ../../frontend/node_modules/typescript/bin/tsc",
+    "prepublishOnly": "npm run build",
     "test": "node test/client.test.js"
   },
+
   "keywords": [
     "ai",
     "voice-agent",

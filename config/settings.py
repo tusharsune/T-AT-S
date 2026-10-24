@@ -121,7 +121,30 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.FormParser',
         'rest_framework.parsers.MultiPartParser',
     ],
+    # Fix #14: Wire throttle classes so rate limiting actually activates.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'core.throttling.BurstRateThrottle',
+        'core.throttling.ApplicationRateThrottle',
+    ],
+
+    'DEFAULT_THROTTLE_RATES': {
+        'burst': '60/min',
+        'sustained': '1000/day',
+        # Per-plan rates (used by per-plan throttle classes in core/throttling.py)
+        'free': '60/min',
+        'growth': '300/min',
+        'enterprise': '600/min',
+    },
 }
+
+# Cache backend — required for DRF throttling to store request counts
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'tats-throttle-cache',
+    }
+}
+
 
 # Swagger / OpenAPI 3.0 Documentation Settings
 SPECTACULAR_SETTINGS = {
@@ -158,8 +181,13 @@ SPECTACULAR_SETTINGS = {
 }
 
 # CORS Configuration
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', str(DEBUG)).lower() in ('true', '1', 't')
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173').split(',')
+    if origin.strip()
+]
 CORS_ALLOW_HEADERS = [
     'authorization',
     'content-type',
@@ -174,13 +202,62 @@ CORS_ALLOW_HEADERS = [
 # T@S Core Agent Settings
 T_AT_S = {
     'GROQ_API_KEY': os.getenv('GROQ_API_KEY', ''),
-    'DEFAULT_MODEL': os.getenv('DEFAULT_MODEL', 'openai/gpt-oss-120b'),
-    'FALLBACK_MODEL': os.getenv('FALLBACK_MODEL', 'openai/gpt-oss-20b'),
+    'DEFAULT_MODEL': os.getenv('DEFAULT_MODEL', 'llama-3.3-70b-versatile'),
+    'FALLBACK_MODEL': os.getenv('FALLBACK_MODEL', 'llama-3.1-8b-instant'),
     'OLLAMA_BASE_URL': os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434'),
     'DISPATCH_TIMEOUT_SECONDS': 4.0,
     'SILENT_RETRY_TIMEOUT_SECONDS': 1.5,
     'DEFAULT_SESSION_TIMEOUT_MINUTES': 3,
 }
+
+# Structured Application Logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} [{name}:{lineno}] {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': os.getenv('LOG_LEVEL', 'INFO'),
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'api': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'agent': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'core': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
 
 # Email Configuration (for OTP Verification & Password Reset)
 # Automatically uses SMTP when EMAIL_HOST_USER is set; safely falls back to Console in dev

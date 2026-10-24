@@ -327,17 +327,16 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
       effectiveMonthly: isAnnual ? `₹${Math.round(growthAnnualPrice / 12).toLocaleString('en-IN')} / mo (billed annually)` : undefined,
       savingsBadge: isAnnual ? `Save ₹${(growthPrice * 2).toLocaleString('en-IN')} (2 Months Free)` : undefined,
       description: isAnnual
-        ? 'Best value for production applications. Annual commitment with unspent credits rollover and 3 neural voice clones.'
+        ? 'Best value for production applications. Annual commitment with 2 months free and priority support.'
         : 'Engineered for production apps needing reliability, instant action dispatch, and sub-850ms latency.',
       features: isAnnual
         ? [
             `${(growthUnits * 12).toLocaleString('en-IN')} units / year included`,
             '2 Full Months Free (~17% Immediate Savings)',
-            'Unspent Credit Rollover Guarantee (Never expires)',
-            '3 Instant Neural Voice Clone Slots (vs 1 on monthly)',
             'Sub-650ms Priority Speech Pipeline Guarantee',
             '50 Concurrent Channels (2x monthly limit)',
             `${gracePct}% Grace Unit Buffer (Never Drops Callers)`,
+            'Curated Studio Voice Library Access',
             'Priority WhatsApp & Slack Bridge Support',
           ]
         : [
@@ -345,7 +344,7 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
             `${gracePct}% Grace Unit Buffer (Never Drops Callers)`,
             '25 Concurrent Voice Channels',
             'Sub-850ms end-to-end latency guarantee',
-            '6-Second Instant Neural Voice Clone',
+            'Curated Studio Voice Library Access',
             'Priority WhatsApp & Slack Bridge',
           ],
       popular: true,
@@ -361,14 +360,13 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
       effectiveMonthly: isAnnual ? `₹${Math.round(enterpriseAnnualPrice / 12).toLocaleString('en-IN')} / mo (billed annually)` : undefined,
       savingsBadge: isAnnual ? `Save ₹${(enterprisePrice * 2).toLocaleString('en-IN')} (2 Months Free)` : undefined,
       description: isAnnual
-        ? 'Dedicated high-throughput voice clusters with maximum SLA guarantees, custom DPAs, and unlimited clones.'
+        ? 'Dedicated high-throughput voice clusters with maximum SLA guarantees and custom DPAs.'
         : 'Dedicated air-gapped clusters for scaled customer support and high-throughput voice actions.',
       features: isAnnual
         ? [
             `${(enterpriseUnits * 12).toLocaleString('en-IN')} units / year included`,
             `Save ₹${(enterprisePrice * 2).toLocaleString('en-IN')} with 2 Months Free`,
-            '100% Unspent Quota Rollover into next year',
-            'Unlimited Instant Neural Voice Clones',
+            'Dedicated High-Throughput Voice Clusters',
             'Unlimited Concurrent Voice Channels',
             '99.99% High Availability SLA Guarantee',
             'Dedicated isolated SQLite / pgvector Cluster',

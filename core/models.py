@@ -119,6 +119,11 @@ class DeveloperToken(models.Model):
     def __str__(self):
         return f"Token for {self.developer.email}"
 
+    def is_expired(self, expiry_days: int = 30) -> bool:
+        from django.utils import timezone
+        from datetime import timedelta
+        return timezone.now() - self.created_at > timedelta(days=expiry_days)
+
     @classmethod
     def generate(cls, developer):
         raw_key = f"tas_dev_{uuid.uuid4().hex}"
@@ -144,11 +149,19 @@ class Application(models.Model):
     service_key_hash = models.CharField(max_length=255)
     wake_word_policy = models.CharField(max_length=20, choices=WAKE_WORD_POLICY_CHOICES, default='CUSTOM')
     plan_tier = models.CharField(max_length=20, choices=PLAN_TIER_CHOICES, default='FREE')
+    plan_expires_at = models.DateTimeField(null=True, blank=True, help_text="Expiry date for active paid subscription plans")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def get_effective_plan_tier(self) -> str:
+        """Returns active plan tier, auto-reverting to FREE if subscription duration has lapsed."""
+        if self.plan_tier in ['GROWTH', 'ENTERPRISE'] and self.plan_expires_at:
+            if timezone.now() > self.plan_expires_at:
+                return 'FREE'
+        return self.plan_tier
 
     def __str__(self):
+
         return f"{self.app_name} ({self.developer.email})"
 
     @staticmethod
@@ -311,27 +324,34 @@ class UsageMeter(models.Model):
         tool_units = int(tool_multiplier) if tool_executed else 0
         total = base_units + tool_units
 
-        self.units_consumed += total
+        from django.db.models import F
+
+        updates = {
+            'units_consumed': F('units_consumed') + total,
+            'requests_count': F('requests_count') + 1,
+        }
         if is_voice:
-            self.voice_units_consumed += base_units
+            updates['voice_units_consumed'] = F('voice_units_consumed') + base_units
         else:
-            self.text_units_consumed += base_units
+            updates['text_units_consumed'] = F('text_units_consumed') + base_units
 
         if tool_executed:
-            self.tool_units_consumed += tool_units
-            self.tools_executed_count += 1
+            updates['tool_units_consumed'] = F('tool_units_consumed') + tool_units
+            updates['tools_executed_count'] = F('tools_executed_count') + 1
 
-        self.requests_count += 1
-        self.save()
+        UsageMeter.objects.filter(pk=self.pk).update(**updates)
+        self.refresh_from_db()
         return total
+
 
     def get_quota_status(self, platform_config=None) -> dict:
         if platform_config is None:
             platform_config = PlatformConfig.get_active()
 
-        if self.application.plan_tier == 'FREE':
+        effective_tier = self.application.get_effective_plan_tier()
+        if effective_tier == 'FREE':
             plan_quota = platform_config.free_tier_units
-        elif self.application.plan_tier == 'ENTERPRISE':
+        elif effective_tier == 'ENTERPRISE':
             plan_quota = platform_config.enterprise_tier_units
         else:
             plan_quota = platform_config.growth_tier_units
@@ -345,7 +365,8 @@ class UsageMeter(models.Model):
 
         return {
             'month': self.month_year,
-            'plan_tier': self.application.plan_tier,
+            'plan_tier': effective_tier,
+
             'units_consumed': self.units_consumed,
             'base_quota': base_quota,
             'bonus_units': self.bonus_units,

@@ -1,3 +1,4 @@
+import { TASLogo } from '../TASLogo';
 import React, { useState, useEffect, useRef } from 'react';
 import { AppView } from '../../types';
 import { TATSBackendAPI } from '../../services/api';
@@ -542,8 +543,10 @@ export function VoiceController() {
           )}
         </div>
 
-        {/* Interactive Live Voice Demo */}
+        {/* Interactive Live Voice Demo / Features */}
+        <div id="features" className="scroll-mt-28 w-full max-w-5xl"></div>
         <div id="voice-demo" className="relative z-10 w-full max-w-5xl rounded-3xl bg-white/95 backdrop-blur-2xl p-5 sm:p-7 border border-[#FFE6DC] shadow-xl overflow-hidden text-left scroll-mt-24">
+
           <div className="flex flex-wrap items-center justify-between pb-3 border-b border-[#FFE6DC]/60 mb-5 gap-2">
             <div className="flex items-center gap-2 text-xs">
               <span className="w-3 h-3 rounded-full bg-[#BA1A1A]/70"></span>
@@ -1708,14 +1711,14 @@ export function VoiceController() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 pb-10 border-b border-[#2C2736]">
             {/* Brand & Slogan Column */}
             <div className="space-y-3.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#FF7E5F] via-[#FF5F45] to-[#FFAE33] flex items-center justify-center text-white font-bold text-xs shadow-md">
-                  <span className="material-symbols-outlined text-[20px]">graphic_eq</span>
-                </div>
-                <span className="font-['Outfit'] font-bold text-xl text-white tracking-tight">
-                  T@S
-                </span>
-              </div>
+              <TASLogo
+                theme="dark"
+                animated={true}
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              />
 
               {/* Slogan with Humanized Warm Color & Cursive Font (No Dots) */}
               <div className="flex flex-wrap items-center gap-2">

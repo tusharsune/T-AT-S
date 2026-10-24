@@ -121,7 +121,18 @@ class Phase4MeteringTestCase(TestCase):
         self.assertEqual(usage_res.status_code, 200)
         self.assertTrue(usage_res.data['quota']['is_exhausted'])
 
-        # 2. Add 500 Bonus Units (Unlocks account)
+        # 2. Verify non-admin gets 403 (Fix #4 security requirement)
+        bonus_denied = dev_client.post(f'/api/v1/apps/{self.app.id}/add-bonus/', {
+            'units': 500,
+            'reason': 'Attempted self-credit'
+        }, format='json')
+        self.assertEqual(bonus_denied.status_code, 403)
+
+        # Elevate to admin to credit bonus units
+        self.dev.is_admin = True
+        self.dev.save()
+
+        # Add 500 Bonus Units as Admin
         bonus_res = dev_client.post(f'/api/v1/apps/{self.app.id}/add-bonus/', {
             'units': 500,
             'reason': 'Customer Loyalty Credit'
@@ -130,11 +141,12 @@ class Phase4MeteringTestCase(TestCase):
         self.assertFalse(bonus_res.data['quota']['is_exhausted'])
         self.assertEqual(bonus_res.data['quota']['bonus_units'], 500)
 
-        # 3. Upgrade Application to STARTER Plan
+        # 3. Upgrade Application Plan Tier as Admin
         upgrade_res = dev_client.post(f'/api/v1/apps/{self.app.id}/upgrade/', {
-            'plan': 'STARTER'
+            'plan': 'GROWTH'
         }, format='json')
         self.assertEqual(upgrade_res.status_code, 200)
-        self.assertEqual(upgrade_res.data['plan_tier'], 'STARTER')
+        self.assertEqual(upgrade_res.data['plan_tier'], 'GROWTH')
         self.assertEqual(upgrade_res.data['quota']['base_quota'], 50500)
+
 

@@ -4,7 +4,7 @@ from rest_framework import status
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from core.models import Application, UsageMeter, PlatformConfig
-from core.auth import DeveloperTokenAuthentication
+from core.auth import DeveloperTokenAuthentication, IsDeveloperAuthenticated
 
 class ApplicationUsageView(APIView):
     """
@@ -60,13 +60,15 @@ class ApplicationUsageView(APIView):
 class ApplicationAddBonusView(APIView):
     """
     Adds promotional bonus units to an application's current month meter.
+    Admin-only: requires is_admin to prevent self-granted free credits.
     """
     authentication_classes = [DeveloperTokenAuthentication]
+    permission_classes = [IsDeveloperAuthenticated]
 
     @extend_schema(
         tags=['Unit Accounting & Quota'],
         summary='Add Bonus Units to Application',
-        description='Credits promotional or coupon bonus units to the application for the current billing cycle.',
+        description='Admin-only. Credits promotional or coupon bonus units to the application for the current billing cycle.',
         parameters=[
             OpenApiParameter(
                 name='Authorization',
@@ -89,8 +91,12 @@ class ApplicationAddBonusView(APIView):
         responses={200: dict}
     )
     def post(self, request, app_id):
+        # Fix #4: Admin-only endpoint. Regular developers cannot grant themselves free units.
+        if not request.developer.is_admin:
+            return Response({'error': 'Unauthorized. Admin privileges required.'}, status=status.HTTP_403_FORBIDDEN)
+
         try:
-            app = Application.objects.get(id=app_id, developer=request.developer)
+            app = Application.objects.get(id=app_id)
         except Application.DoesNotExist:
             return Response({'error': 'Application not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -103,8 +109,12 @@ class ApplicationAddBonusView(APIView):
             application=app,
             month_year=current_month
         )
-        meter.bonus_units += int(units)
-        meter.save()
+        # Fix #13: Use F() for atomic increment to prevent race-condition overwrite.
+        from django.db.models import F
+        UsageMeter.objects.filter(pk=meter.pk).update(
+            bonus_units=F('bonus_units') + int(units)
+        )
+        meter.refresh_from_db()
 
         platform_config = PlatformConfig.get_active()
         quota_status = meter.get_quota_status(platform_config)
@@ -117,14 +127,16 @@ class ApplicationAddBonusView(APIView):
 
 class ApplicationUpgradeView(APIView):
     """
-    Upgrades application tier from Free to Starter (INR 799/month).
+    Upgrades application tier. Admin-only: plan changes must follow verified payment.
+    Regular developers should use the Razorpay payment flow to change their plan tier.
     """
     authentication_classes = [DeveloperTokenAuthentication]
+    permission_classes = [IsDeveloperAuthenticated]
 
     @extend_schema(
         tags=['Unit Accounting & Quota'],
-        summary='Upgrade Application Plan Tier',
-        description='Upgrades application from Free Tier (2,000 units/mo) to Starter Tier (INR 799/mo, 50,000 units/mo).',
+        summary='Upgrade Application Plan Tier (Admin)',
+        description='Admin-only. Directly sets an application plan tier. Developers should use the billing/payment flow instead.',
         parameters=[
             OpenApiParameter(
                 name='Authorization',
@@ -138,7 +150,7 @@ class ApplicationUpgradeView(APIView):
             'application/json': {
                 'type': 'object',
                 'properties': {
-                    'plan': {'type': 'string', 'enum': ['STARTER', 'FREE'], 'example': 'STARTER'}
+                    'plan': {'type': 'string', 'enum': ['FREE', 'GROWTH', 'ENTERPRISE'], 'example': 'GROWTH'}
                 },
                 'required': ['plan']
             }
@@ -146,8 +158,12 @@ class ApplicationUpgradeView(APIView):
         responses={200: dict}
     )
     def post(self, request, app_id):
+        # Fix #4: Admin-only — plan changes must follow verified payment, not be done directly.
+        if not request.developer.is_admin:
+            return Response({'error': 'Unauthorized. Admin privileges required. Use the billing payment flow to upgrade your plan.'}, status=status.HTTP_403_FORBIDDEN)
+
         try:
-            app = Application.objects.get(id=app_id, developer=request.developer)
+            app = Application.objects.get(id=app_id)
         except Application.DoesNotExist:
             return Response({'error': 'Application not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -157,13 +173,13 @@ class ApplicationUpgradeView(APIView):
         elif target_plan in ['SCALE_ENTERPRISE']:
             target_plan = 'ENTERPRISE'
 
-        valid_plans = ['FREE', 'GROWTH', 'ENTERPRISE', 'STARTER']
+        valid_plans = ['FREE', 'GROWTH', 'ENTERPRISE']
         if target_plan not in valid_plans:
             return Response({'error': f"Invalid plan. Choose from {valid_plans}."}, status=status.HTTP_400_BAD_REQUEST)
 
         if app.plan_tier == target_plan:
             return Response({
-                'error': f"Application '{app.app_name}' is already running on the {target_plan} plan. Use credit booster to add more units.",
+                'error': f"Application '{app.app_name}' is already running on the {target_plan} plan.",
                 'code': 'ALREADY_ACTIVE'
             }, status=status.HTTP_400_BAD_REQUEST)
 

@@ -1,3 +1,4 @@
+import { TASLogoIcon } from './TASLogo';
 import React, { useState, useEffect, useRef } from 'react';
 
 interface IntroCinematicProps {
@@ -558,17 +559,21 @@ export const IntroCinematic: React.FC<IntroCinematicProps> = ({ onComplete }) =>
           <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center animate-in fade-in duration-400 text-left">
             {/* Left Column: Brand Emblem & CTA */}
             <div className="lg:col-span-6 space-y-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#FF7E5F] via-[#FF5F45] to-[#FFAE33] flex items-center justify-center text-white shadow-lg shadow-[#FF7E5F]/25">
-                <span className="material-symbols-outlined text-[36px]">graphic_eq</span>
+              <div className="inline-block p-2">
+                <img
+                  src="/tas_final_logo_mark.svg"
+                  alt=""
+                  className="w-[84px] h-[84px] aspect-square object-contain select-none"
+                />
               </div>
 
               <div>
-                <h1 className="font-['Outfit'] text-4xl sm:text-5xl font-extrabold text-[#1D1A23] tracking-tight">
-                  T@S
+                <h1 className="font-['Plus_Jakarta_Sans',Outfit,sans-serif] text-4xl sm:text-5xl font-extrabold text-[#1a1520] tracking-[0.12em]">
+                  T<span className="text-[#ff6b4a]">@</span>S
                 </h1>
-                <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-[#FFF6F3] border border-[#FFDAD2] shadow-xs mt-2">
-                  <span className="font-cursive text-2xl font-bold tracking-wide text-[#FF5F45]">
-                    Talk. Decide. Solve.
+                <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-[#fff7ed] border border-[#ffeedd] shadow-xs mt-2">
+                  <span className="font-['Plus_Jakarta_Sans',Outfit,sans-serif] text-sm font-bold tracking-[0.2em] text-[#ff6b4a] uppercase">
+                    Talk · Decide · Solve
                   </span>
                 </div>
               </div>

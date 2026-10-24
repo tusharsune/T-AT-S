@@ -148,3 +148,42 @@
   transform-origin: center;
 }
 
+
+
+/* T@S Footer Half-Facet Shift Color Animation */
+.tas-mark--animated.is-running .f {
+  animation-duration: 2s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.tas-mark--animated.is-running .f-tl,
+.tas-mark--animated.is-running .f-rt,
+.tas-mark--animated.is-running .f-br,
+.tas-mark--animated.is-running .f-lb { animation-name: tas-chroma-1; }
+.tas-mark--animated.is-running .f-tr,
+.tas-mark--animated.is-running .f-rb,
+.tas-mark--animated.is-running .f-bl,
+.tas-mark--animated.is-running .f-lt { animation-name: tas-chroma-2; }
+
+.tas-mark--animated.is-running .f-tl,
+.tas-mark--animated.is-running .f-tr { animation-delay: 0s; }
+.tas-mark--animated.is-running .f-rt,
+.tas-mark--animated.is-running .f-rb { animation-delay: 0.25s; }
+.tas-mark--animated.is-running .f-br,
+.tas-mark--animated.is-running .f-bl { animation-delay: 0.5s; }
+.tas-mark--animated.is-running .f-lb,
+.tas-mark--animated.is-running .f-lt { animation-delay: 0.75s; }
+
+@keyframes tas-chroma-1 {
+  0%, 100% { fill: #ff7a29; }
+  33% { fill: #ffd9b8; }
+  66% { fill: #e0482a; }
+}
+@keyframes tas-chroma-2 {
+  0%, 100% { fill: #c93a1c; }
+  33% { fill: #ff9a3d; }
+  66% { fill: #ffc99a; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tas-mark--animated.is-running .f { animation: none; }
+}

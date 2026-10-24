@@ -1,3 +1,4 @@
+import { TASLogoIcon } from './TASLogo';
 import React, { useState, useEffect } from 'react';
 import { TATSBackendAPI } from '../services/api';
 
@@ -201,9 +202,11 @@ export const TASWizard: React.FC<TASWizardProps> = ({ isOpen, onClose, onSuccess
         {/* Header */}
         <div className="px-6 sm:px-8 pt-6 pb-4 bg-white/80 border-b border-[#FFE6DC]/60 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#FF7E5F] to-[#FFAE33] flex items-center justify-center text-white shadow-[0_4px_16px_rgba(255,126,95,0.4)]">
-              <span className="material-symbols-outlined text-[26px]">graphic_eq</span>
-            </div>
+            <img
+              src="/tas_final_logo_mark_small.svg"
+              alt=""
+              className="h-[44px] w-[44px] aspect-square shrink-0 select-none object-contain"
+            />
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <span className="font-['Outfit'] font-bold text-xl text-[#1D1A23] tracking-tight">

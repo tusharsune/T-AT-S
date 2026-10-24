@@ -107,12 +107,26 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
           setTimeout(() => setMicState('listening'), 1800);
         }
         return;
+      } else if (res && !res.ok) {
+        // Fix #25: Do not silently fake 200 OK on backend failure
+        const errMsg = (res.data as any)?.message || (res.data as any)?.error || (res as any)?.error || `HTTP ${res.status} Error`;
+        onShowToast('Backend Error', String(errMsg));
+        setEndpointText(`POST /api/v1/chat/ → ${res.status || 'Error'}`);
+        setVoiceReply(`“Execution failed: ${errMsg}”`);
+        setMicState('listening');
+        return;
       }
-    } catch {
-      // Backend offline fallback
+    } catch (err: any) {
+      if (apiKey) {
+        onShowToast('Connection Failed', err?.message || 'Unable to reach T@S backend engine.');
+        setEndpointText('POST /api/v1/chat/ → Network Error');
+        setVoiceReply('“Could not connect to backend engine. Please check your network or server status.”');
+        setMicState('listening');
+        return;
+      }
     }
 
-    // Fallback to preset simulation if backend call was offline
+    // Only fallback to interactive demo simulation when not authenticated (no API key configured)
     if (presetFallback) {
       setCurrentTool(presetFallback.action);
       setE2eLatency(presetFallback.totalLatency);
@@ -123,14 +137,14 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
         api: presetFallback.act,
         tts: 140
       });
-      setEndpointText(`${presetFallback.method} ${presetFallback.endpoint} → 200 OK`);
+      setEndpointText(`${presetFallback.method} ${presetFallback.endpoint} → Demo Mode`);
       setCurrentActionPayload({
         action: presetFallback.action,
         ...Object.fromEntries(Object.entries(presetFallback.result).map(([k, v]) => [k, String(v)]))
       });
       const reply = `“Executed ${presetFallback.action} with ${presetFallback.totalLatency}ms response time.”`;
       setVoiceReply(reply);
-      onShowToast(`Simulating (Offline Mock): ${presetFallback.label}`, `Deterministic dispatch finished in ${presetFallback.totalLatency}ms.`);
+      onShowToast(`Demo Simulation: ${presetFallback.label}`, `Running in offline interactive demo mode.`);
 
       setTimeout(() => {
         setMicState('synthesizing');

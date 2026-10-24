@@ -117,7 +117,7 @@ class RazorpayCreateOrderView(APIView):
                     'price_inr': growth_annual_price,
                     'amount_paise': int(growth_annual_price * 100),
                     'units_credited': growth_units * 12,
-                    'description': f'{growth_units * 12:,} units/yr (2 Mo Free), unspent rollover guarantee, 3 voice clones'
+                    'description': f'{growth_units * 12:,} units/yr (2 Mo Free), priority speech pipeline guarantee'
                 },
                 'STARTER': {
                     'name': 'Starter Tier',
@@ -138,7 +138,7 @@ class RazorpayCreateOrderView(APIView):
                     'price_inr': enterprise_annual_price,
                     'amount_paise': int(enterprise_annual_price * 100),
                     'units_credited': enterprise_units * 12,
-                    'description': f'{enterprise_units * 12:,} units/yr (2 Mo Free), air-gapped clusters, unlimited clones, 99.99% SLA'
+                    'description': f'{enterprise_units * 12:,} units/yr (2 Mo Free), air-gapped clusters, 99.99% SLA'
                 }
             }
             plan_meta = plan_configs.get(plan_tier, plan_configs['GROWTH_STARTUP'])
@@ -170,10 +170,14 @@ class RazorpayCreateOrderView(APIView):
                 order_id = rp_order['id']
             except Exception as e:
                 logger.error(f"Razorpay live order creation failed: {e}")
-                # Fallback to deterministic reference
-                order_id = f"order_{uuid.uuid4().hex[:16]}"
+                # Fix #11: Fail properly when Razorpay is down — do NOT create a fake order ID.
+                # A fake order would allow signature bypass attacks later.
+                return Response(
+                    {'error': 'Payment gateway is temporarily unavailable. Please try again in a moment.'},
+                    status=status.HTTP_502_BAD_GATEWAY
+                )
         else:
-            # Fallback when live gateway keys are awaiting configuration
+            # No live gateway keys configured — use a deterministic reference for local dev/testing
             order_id = f"order_{uuid.uuid4().hex[:16]}"
 
         payment_order = PaymentOrder.objects.create(
@@ -245,22 +249,39 @@ class RazorpayVerifyView(APIView):
             return Response({'error': 'Order not found or access denied.'}, status=status.HTTP_404_NOT_FOUND)
 
         razorpay_key_secret = getattr(settings, 'RAZORPAY_KEY_SECRET', '')
+        is_debug = getattr(settings, 'DEBUG', False)
 
-        # Signature verification if secret configured
-        if razorpay_key_secret and not signature.startswith('simulated_') and not signature.startswith('sandbox_'):
-            try:
-                expected_sig = hmac.new(
-                    razorpay_key_secret.encode('utf-8'),
-                    f"{order_id}|{payment_id}".encode('utf-8'),
-                    hashlib.sha256
-                ).hexdigest()
+        # Fix #3: Prevent double-claim — reject if order already PAID
+        if order.status == 'PAID':
+            return Response({'error': 'This payment order has already been processed.'}, status=status.HTTP_400_BAD_REQUEST)
 
-                if not hmac.compare_digest(expected_sig, signature):
+        # Fix #1 & #2: Always verify signature when secret is configured.
+        # simulated_/sandbox_ bypass is only allowed in DEBUG mode (local dev).
+        # In production (DEBUG=False), ALL signatures are verified — no bypass.
+        signature_is_bypass = signature.startswith('simulated_') or signature.startswith('sandbox_')
+        if razorpay_key_secret:
+            if signature_is_bypass and not is_debug:
+                # Block bypass attempts in production
+                order.status = 'FAILED'
+                order.save()
+                return Response({'error': 'Invalid payment signature. Transaction rejected.'}, status=status.HTTP_400_BAD_REQUEST)
+            elif not signature_is_bypass:
+                try:
+                    expected_sig = hmac.new(
+                        razorpay_key_secret.encode('utf-8'),
+                        f"{order_id}|{payment_id}".encode('utf-8'),
+                        hashlib.sha256
+                    ).hexdigest()
+
+                    if not hmac.compare_digest(expected_sig, signature):
+                        order.status = 'FAILED'
+                        order.save()
+                        return Response({'error': 'Invalid payment signature. Transaction rejected.'}, status=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    logger.error(f"Signature verification error: {e}")
                     order.status = 'FAILED'
                     order.save()
-                    return Response({'error': 'Invalid payment signature. Transaction rejected.'}, status=status.HTTP_400_BAD_REQUEST)
-            except Exception as e:
-                logger.error(f"Signature verification error: {e}")
+                    return Response({'error': 'Signature verification failed. Please contact support.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Payment Successful!
         order.status = 'PAID'
@@ -282,11 +303,17 @@ class RazorpayVerifyView(APIView):
 
         if target_app:
             if not is_topup_order:
+                is_annual = 'ANNUAL' in order.plan_tier
+                duration_days = 365 if is_annual else 30
+                from datetime import timedelta
+                target_app.plan_expires_at = timezone.now() + timedelta(days=duration_days)
+
                 if order.plan_tier in ['SCALE_ENTERPRISE', 'SCALE_ENTERPRISE_ANNUAL']:
                     target_app.plan_tier = 'ENTERPRISE'
                 elif order.plan_tier in ['GROWTH_STARTUP', 'GROWTH_STARTUP_ANNUAL', 'GROWTH', 'STARTER']:
                     target_app.plan_tier = 'GROWTH'
                 target_app.save()
+
 
             # Credit units into current month UsageMeter
             current_month = timezone.now().strftime('%Y-%m')
@@ -294,8 +321,16 @@ class RazorpayVerifyView(APIView):
                 application=target_app,
                 month_year=current_month
             )
-            meter.bonus_units += order.units_credited
-            meter.save()
+            if is_topup_order:
+                # Fix #7: Only credit bonus units for explicit top-up purchases.
+                # Plan subscription purchases ONLY change the plan_tier — they do NOT
+                # add bonus units to avoid doubling the developer's quota.
+                # Fix #13: Use F() for atomic increment to prevent race-condition overwrite.
+                from django.db.models import F
+                UsageMeter.objects.filter(pk=meter.pk).update(
+                    bonus_units=F('bonus_units') + order.units_credited
+                )
+                meter.refresh_from_db()
 
         # Create billing notification
         if is_topup_order:
@@ -399,7 +434,13 @@ class RazorpayWebhookView(APIView):
         webhook_secret = getattr(settings, 'RAZORPAY_WEBHOOK_SECRET', '')
         webhook_sig = request.headers.get('X-Razorpay-Signature', '')
 
-        if webhook_secret and webhook_sig:
+        if webhook_secret:
+            # Fix #2: If secret is configured, the signature header MUST be present.
+            # Reject immediately if header is missing — no signature = no processing.
+            if not webhook_sig:
+                logger.warning("Webhook rejected: X-Razorpay-Signature header missing.")
+                return Response({'error': 'Webhook signature header required.'}, status=status.HTTP_400_BAD_REQUEST)
+
             body_bytes = request.body
             computed_sig = hmac.new(
                 webhook_secret.encode('utf-8'),
@@ -407,6 +448,7 @@ class RazorpayWebhookView(APIView):
                 hashlib.sha256
             ).hexdigest()
             if not hmac.compare_digest(computed_sig, webhook_sig):
+                logger.warning("Webhook rejected: signature mismatch.")
                 return Response({'error': 'Invalid webhook signature'}, status=status.HTTP_400_BAD_REQUEST)
 
         event = request.data.get('event')
@@ -421,11 +463,37 @@ class RazorpayWebhookView(APIView):
                 order.razorpay_payment_id = payment_entity.get('id', '')
                 order.save()
                 if order.application:
-                    if order.plan_tier in ['SCALE_ENTERPRISE', 'SCALE_ENTERPRISE_ANNUAL']:
-                        order.application.plan_tier = 'ENTERPRISE'
+                    is_topup = order.plan_tier.startswith('TOPUP') or order.plan_tier in ['ADDON_CREDITS', 'CREDIT_BOOSTER']
+                    if is_topup:
+                        # Fix #10: Top-up webhook — credit units only, do NOT change plan_tier.
+                        # Changing it here can downgrade an Enterprise app to Growth.
+                        from django.db.models import F
+                        current_month = timezone.now().strftime('%Y-%m')
+                        meter, _ = UsageMeter.objects.get_or_create(
+                            application=order.application,
+                            month_year=current_month
+                        )
+                        UsageMeter.objects.filter(pk=meter.pk).update(
+                            bonus_units=F('bonus_units') + order.units_credited
+                        )
                     else:
-                        order.application.plan_tier = 'GROWTH'
-                    order.application.save()
+                        # Plan subscription webhook — update plan_tier and set expiration
+                        is_annual = 'ANNUAL' in order.plan_tier
+                        duration_days = 365 if is_annual else 30
+                        from datetime import timedelta
+                        order.application.plan_expires_at = timezone.now() + timedelta(days=duration_days)
+
+                        if order.plan_tier in ['SCALE_ENTERPRISE', 'SCALE_ENTERPRISE_ANNUAL']:
+                            order.application.plan_tier = 'ENTERPRISE'
+                        elif order.plan_tier in ['GROWTH_STARTUP', 'GROWTH_STARTUP_ANNUAL', 'GROWTH', 'STARTER']:
+                            order.application.plan_tier = 'GROWTH'
+                        order.application.save()
+        elif event == 'payment.failed' and order_id:
+            order = PaymentOrder.objects.filter(razorpay_order_id=order_id).first()
+            if order and order.status != 'PAID':
+                order.status = 'FAILED'
+                order.save()
 
         return Response({'status': 'webhook received'}, status=status.HTTP_200_OK)
+
 

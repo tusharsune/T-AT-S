@@ -23,6 +23,9 @@ frontend/node_modules/
 frontend/dist/
 staticfiles/
 
+# Private Handover & History
+CONVERSATION_HISTORY.md
+
 
 
 

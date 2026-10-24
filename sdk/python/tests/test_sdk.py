@@ -1,11 +1,19 @@
 import unittest
+import os
+import sys
 from unittest.mock import patch, MagicMock
 from enum import Enum
 from datetime import datetime
 import json
 
+# Ensure parent directory (sdk/python) is in sys.path
+sdk_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if sdk_dir not in sys.path:
+    sys.path.insert(0, sdk_dir)
+
 from django.test import RequestFactory
 from django.conf import settings
+
 
 # Configure minimal Django settings if not already configured
 if not settings.configured:

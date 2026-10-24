@@ -10,8 +10,8 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
     def authenticate(self, request):
         auth_header = request.headers.get('Authorization')
         if not auth_header:
-            # Check query param fallback or X-API-KEY header
-            auth_header = request.headers.get('X-Api-Key') or request.query_params.get('api_key')
+            # Check X-Api-Key header (never accept API keys via query string URLs for security)
+            auth_header = request.headers.get('X-Api-Key')
             if not auth_header:
                 return None
             raw_key = auth_header.strip()
@@ -54,7 +54,8 @@ class DeveloperTokenAuthentication(authentication.BaseAuthentication):
     def authenticate(self, request):
         auth_header = request.headers.get('Authorization')
         if not auth_header:
-            auth_header = request.headers.get('X-Developer-Token') or request.query_params.get('dev_token')
+            # Check X-Developer-Token header (never accept tokens via query string URLs for security)
+            auth_header = request.headers.get('X-Developer-Token')
             if not auth_header:
                 return None
             raw_token = auth_header.strip()
@@ -72,6 +73,9 @@ class DeveloperTokenAuthentication(authentication.BaseAuthentication):
 
         try:
             token = DeveloperToken.objects.select_related('developer').get(key=raw_token)
+            if token.is_expired():
+                token.delete()
+                raise exceptions.AuthenticationFailed('Developer token has expired. Please log in again.')
         except DeveloperToken.DoesNotExist:
             raise exceptions.AuthenticationFailed('Invalid or expired developer token.')
 

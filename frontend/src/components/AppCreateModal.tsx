@@ -29,20 +29,24 @@ export const AppCreateModal: React.FC<AppCreateModalProps> = ({
     setIsLoading(true);
     try {
       const res = await TATSBackendAPI.createApplication(appName, baseUrl, wakeWordPolicy);
-      if (res.ok && res.data.application) {
+      if (res.ok && res.data && res.data.application) {
+        const apiKey = res.data.credentials?.api_key || res.data.application?.api_key || '';
+        const serviceKey = res.data.credentials?.service_key || res.data.application?.service_key || '';
         setCreatedKeys({
-          apiKey: res.data.credentials.api_key,
-          serviceKey: res.data.credentials.service_key,
+          apiKey,
+          serviceKey,
         });
-        // Save as active API key
-        TATSBackendAPI.setApiKey(res.data.credentials.api_key);
+        if (apiKey) {
+          TATSBackendAPI.setApiKey(apiKey);
+        }
         onCreated(res.data.application);
         onShowToast('Application Cluster Created!', `Provisioned "${appName}" with 256-bit API keys.`);
       } else {
-        onShowToast('Failed to Create Application', res.data.error || 'Server error occurred.', 'warning');
+        const errMsg = res?.data?.error || res?.data?.message || 'Server error occurred.';
+        onShowToast('Failed to Create Application', String(errMsg), 'warning');
       }
     } catch (err: any) {
-      onShowToast('Connection Failed', 'Could not reach Django server.', 'warning');
+      onShowToast('Application Error', err?.message || 'Could not complete cluster provisioning.', 'warning');
     } finally {
       setIsLoading(false);
     }

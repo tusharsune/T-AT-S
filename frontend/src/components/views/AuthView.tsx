@@ -1,3 +1,4 @@
+import { TASLogoIcon } from '../TASLogo';
 import React, { useState, useEffect, useRef } from 'react';
 import { TATSBackendAPI } from '../../services/api';
 
@@ -279,15 +280,29 @@ export const AuthView: React.FC<AuthViewProps> = ({
     <div className="min-h-screen bg-[#FAF9F6] text-[#1D1A23] flex flex-col font-['Manrope'] selection:bg-[#FF7E5F]/20 selection:text-[#721702]">
       {/* Top Navbar */}
       <header className="h-16 px-6 sm:px-10 border-b border-[#FFE6DC]/60 flex items-center justify-between bg-white/85 backdrop-blur-xl z-20 shadow-[0_1px_8px_rgba(30,27,36,0.03)]">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#FF7E5F] via-[#FF5F45] to-[#FFAE33] flex items-center justify-center text-white shadow-[0_2px_10px_rgba(255,95,69,0.25)]">
-            <span className="material-symbols-outlined text-[20px]">graphic_eq</span>
+        <a
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            onReturnHome();
+          }}
+          aria-label="T@S home"
+          className="group flex items-center gap-[12px] text-left focus:outline-none transition-transform duration-200 ease-out hover:scale-[1.04] motion-reduce:hover:scale-100"
+        >
+          <img
+            src="/tas_final_logo_mark_small.svg"
+            alt=""
+            className="h-[36px] md:h-[44px] w-auto aspect-square shrink-0 select-none object-contain"
+          />
+          <div className="flex flex-col justify-center leading-none select-none">
+            <span className="font-['Plus_Jakarta_Sans',Outfit,sans-serif] font-extrabold text-[20px] md:text-[22px] tracking-[0.12em] text-[#1a1520] leading-none">
+              T<span className="text-[#ff6b4a]">@</span>S
+            </span>
+            <span className="font-['Plus_Jakarta_Sans',Outfit,sans-serif] text-[9px] md:text-[9.5px] uppercase font-semibold tracking-[0.2em] text-[#6b6470] leading-none mt-1">
+              TALK · DECIDE · SOLVE
+            </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="font-['Outfit'] font-bold text-xl tracking-tight text-[#1D1A23]">T@S</span>
-            <span className="text-base font-cursive text-[#A53B22] font-bold hidden sm:inline ml-1">Talk. Decide. Solve.</span>
-          </div>
-        </div>
+        </a>
 
         <button
           onClick={onReturnHome}
