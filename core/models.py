@@ -612,6 +612,9 @@ class EmailOTPVerification(models.Model):
                         if resp.status in (200, 201):
                             logger.info(f"[T@S Email] OTP successfully delivered to {email} via Resend HTTP API")
                             return
+                except urllib.error.HTTPError as http_err:
+                    err_body = http_err.read().decode('utf-8', errors='ignore')
+                    logger.error(f"[T@S Email] Resend API Rejected (Status {http_err.code}): {err_body}")
                 except Exception as ex:
                     logger.warning(f"[T@S Email] Resend HTTP send failed ({ex}), falling back to SMTP...")
 
