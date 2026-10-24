@@ -3,7 +3,13 @@
  * Connects the dashboard, playground, and billing directly to the Django Acoustic Action Engine.
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
+const getBaseUrl = (): string => {
+  const raw = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
+  const clean = raw.trim().replace(/\/+$/, '');
+  return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`;
+};
+
+const API_BASE = getBaseUrl();
 
 export class TATSBackendAPI {
   public static getApiKey(): string | null {
