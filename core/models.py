@@ -581,6 +581,41 @@ class EmailOTPVerification(models.Model):
         from email.utils import parseaddr, formataddr
 
         def _dispatch_mail_async():
+            import os
+            import json
+            import urllib.request
+            import logging
+            logger = logging.getLogger(__name__)
+
+            # Option 1: Use Resend REST API (Port 443 HTTPS - NEVER blocked by cloud firewalls/Render)
+            resend_key = os.getenv('RESEND_API_KEY', '').strip()
+            if resend_key:
+                try:
+                    payload = {
+                        "from": os.getenv('RESEND_FROM_EMAIL', 'T@S Platform <onboarding@resend.dev>'),
+                        "to": [email],
+                        "subject": subject,
+                        "text": plain_message,
+                        "html": html_message
+                    }
+                    req = urllib.request.Request(
+                        "https://api.resend.com/emails",
+                        data=json.dumps(payload).encode('utf-8'),
+                        headers={
+                            "Authorization": f"Bearer {resend_key}",
+                            "Content-Type": "application/json",
+                            "User-Agent": "TATS-Engine/1.0"
+                        },
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        if resp.status in (200, 201):
+                            logger.info(f"[T@S Email] OTP successfully delivered to {email} via Resend HTTP API")
+                            return
+                except Exception as ex:
+                    logger.warning(f"[T@S Email] Resend HTTP send failed ({ex}), falling back to SMTP...")
+
+            # Option 2: Fallback to standard Django send_mail (SMTP)
             try:
                 raw_from = getattr(settings, 'DEFAULT_FROM_EMAIL', '"T @ S" <noreply@tats.ai>')
                 parsed_name, parsed_addr = parseaddr(raw_from)
@@ -594,8 +629,7 @@ class EmailOTPVerification(models.Model):
                     fail_silently=False
                 )
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(
+                logger.error(
                     f"[T@S Email Error] Failed to send email via SMTP ({e}). Fallback verification OTP: {raw_otp} for {email}"
                 )
 
