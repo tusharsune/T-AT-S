@@ -272,10 +272,18 @@ EMAIL_BACKEND = os.getenv(
     'django.core.mail.backends.smtp.EmailBackend' if _raw_email_user else 'django.core.mail.backends.console.EmailBackend'
 )
 EMAIL_HOST = _email_host
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+_email_port = int(os.getenv('EMAIL_PORT', 465))
+EMAIL_PORT = _email_port
+# If port is 465, use direct SSL. Otherwise if port 587, use TLS.
+if _email_port == 465:
+    EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'True').lower() in ('true', '1', 't')
+    EMAIL_USE_TLS = False
+else:
+    EMAIL_USE_SSL = False
+    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 't')
 EMAIL_HOST_USER = _raw_email_user
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '').strip().replace(' ', '')
+EMAIL_TIMEOUT = 10
 
 from email.utils import formataddr
 _default_from = os.getenv('DEFAULT_FROM_EMAIL', '').strip()
