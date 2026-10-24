@@ -587,7 +587,41 @@ class EmailOTPVerification(models.Model):
             import logging
             logger = logging.getLogger(__name__)
 
-            # Option 1: Use Resend REST API (Port 443 HTTPS - NEVER blocked by cloud firewalls/Render)
+            # Option 1: Brevo (Sendinblue) REST API (Free 300 emails/day to ANY email address, HTTPS Port 443 - NEVER blocked by Render)
+            brevo_key = os.getenv('BREVO_API_KEY', '').strip()
+            if brevo_key:
+                try:
+                    sender_email = os.getenv('BREVO_SENDER_EMAIL') or os.getenv('EMAIL_HOST_USER') or 'ts.help2407@gmail.com'
+                    sender_name = os.getenv('BREVO_SENDER_NAME', 'T@S Platform')
+                    payload = {
+                        "sender": {"name": sender_name, "email": sender_email},
+                        "to": [{"email": email}],
+                        "subject": subject,
+                        "htmlContent": html_message,
+                        "textContent": plain_message
+                    }
+                    req = urllib.request.Request(
+                        "https://api.brevo.com/v3/smtp/email",
+                        data=json.dumps(payload).encode('utf-8'),
+                        headers={
+                            "api-key": brevo_key,
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                            "User-Agent": "TATS-Engine/1.0"
+                        },
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        if resp.status in (200, 201, 202):
+                            logger.info(f"[T@S Email] OTP successfully delivered to {email} via Brevo HTTP API")
+                            return
+                except urllib.error.HTTPError as http_err:
+                    err_body = http_err.read().decode('utf-8', errors='ignore')
+                    logger.error(f"[T@S Email] Brevo API Rejected (Status {http_err.code}): {err_body}")
+                except Exception as ex:
+                    logger.warning(f"[T@S Email] Brevo HTTP send failed ({ex}), trying next provider...")
+
+            # Option 2: Use Resend REST API (Port 443 HTTPS - NEVER blocked by cloud firewalls/Render)
             resend_key = os.getenv('RESEND_API_KEY', '').strip()
             if resend_key:
                 try:
