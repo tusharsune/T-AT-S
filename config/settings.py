@@ -85,14 +85,15 @@ if DATABASE_URL and (DATABASE_URL.startswith('postgres://') or DATABASE_URL.star
                 safe_password = urllib.parse.quote(urllib.parse.unquote(password), safe='')
                 sanitized_url = f"{prefix}://{user}:{safe_password}@{hostpart}"
 
-        DATABASES = {
-            'default': dj_database_url.parse(
-                sanitized_url,
-                conn_max_age=600,
-                conn_health_checks=True,
-                ssl_require=True
-            )
-        }
+        parsed_db = dj_database_url.parse(
+            sanitized_url,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=True
+        )
+        # Required for Supabase PgBouncer poolers to prevent named cursor conflicts
+        parsed_db['DISABLE_SERVER_SIDE_CURSORS'] = True
+        DATABASES = {'default': parsed_db}
     except Exception as db_err:
         import logging
         logging.getLogger(__name__).error(f"[T@S Database Error] Invalid DATABASE_URL ({db_err}). Falling back to SQLite.")
