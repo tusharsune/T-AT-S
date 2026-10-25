@@ -66,17 +66,42 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database Configuration: SQLite default for local zero-config, PostgreSQL/Supabase when configured
-DATABASE_URL = os.getenv('DATABASE_URL', '')
-if DATABASE_URL.startswith('postgres://') or DATABASE_URL.startswith('postgresql://'):
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=DATABASE_URL,
-            conn_max_age=600,
-            conn_health_checks=True,
-            ssl_require=True
-        )
-    }
+DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
+if DATABASE_URL and (DATABASE_URL.startswith('postgres://') or DATABASE_URL.startswith('postgresql://')):
+    try:
+        import dj_database_url
+        import urllib.parse
+
+        # Sanitize password component if unescaped special characters (#, @, [, ], etc.) are present
+        sanitized_url = DATABASE_URL
+        if '://' in DATABASE_URL and '@' in DATABASE_URL:
+            prefix, _, rest = DATABASE_URL.partition('://')
+            userpass, _, hostpart = rest.rpartition('@')
+            if ':' in userpass:
+                user, _, password = userpass.partition(':')
+                # Strip accidental outer brackets (e.g. from [YOUR-PASSWORD] placeholders)
+                if password.startswith('[') and password.endswith(']'):
+                    password = password[1:-1]
+                safe_password = urllib.parse.quote(urllib.parse.unquote(password), safe='')
+                sanitized_url = f"{prefix}://{user}:{safe_password}@{hostpart}"
+
+        DATABASES = {
+            'default': dj_database_url.parse(
+                sanitized_url,
+                conn_max_age=600,
+                conn_health_checks=True,
+                ssl_require=True
+            )
+        }
+    except Exception as db_err:
+        import logging
+        logging.getLogger(__name__).error(f"[T@S Database Error] Invalid DATABASE_URL ({db_err}). Falling back to SQLite.")
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 else:
     DATABASES = {
         'default': {
