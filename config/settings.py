@@ -68,17 +68,14 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database Configuration: SQLite default for local zero-config, PostgreSQL/Supabase when configured
 DATABASE_URL = os.getenv('DATABASE_URL', '')
 if DATABASE_URL.startswith('postgres://') or DATABASE_URL.startswith('postgresql://'):
-    import urllib.parse as urlparse
-    url = urlparse.urlparse(DATABASE_URL)
+    import dj_database_url
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': url.path[1:],
-            'USER': url.username,
-            'PASSWORD': url.password,
-            'HOST': url.hostname,
-            'PORT': url.port or 5432,
-        }
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=True
+        )
     }
 else:
     DATABASES = {
