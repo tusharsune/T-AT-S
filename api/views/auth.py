@@ -210,6 +210,8 @@ class DeveloperRegisterView(APIView):
                 phone=formatted_phone,
                 password=password if password else None,
                 is_admin=is_first_user,
+                is_staff=is_first_user,
+                is_superuser=is_first_user,
                 is_verified=False
             )
 
