@@ -581,9 +581,45 @@ class EmailOTPVerification(models.Model):
         from email.utils import parseaddr, formataddr
 
         def _dispatch_mail_async():
+            import os
+            import json
+            import urllib.request
             import logging
             logger = logging.getLogger(__name__)
 
+            # Option 1: Vercel Mail Proxy (HTTPS Port 443 - Uses Gmail SMTP via Vercel Serverless Function)
+            proxy_url = os.getenv('MAIL_PROXY_URL', 'https://t-at-s.vercel.app/api/send-otp').strip()
+            proxy_secret = os.getenv('MAIL_PROXY_SECRET', 'tas_proxy_secret_key_2026').strip()
+            if proxy_url:
+                try:
+                    payload = {
+                        "secret": proxy_secret,
+                        "to": email,
+                        "subject": subject,
+                        "text": plain_message,
+                        "html": html_message
+                    }
+                    req = urllib.request.Request(
+                        proxy_url,
+                        data=json.dumps(payload).encode('utf-8'),
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-proxy-secret": proxy_secret,
+                            "User-Agent": "TATS-Backend/1.0"
+                        },
+                        method="POST"
+                    )
+                    with urllib.request.urlopen(req, timeout=12) as resp:
+                        if resp.status in (200, 201):
+                            logger.info(f"[T@S Email] OTP successfully dispatched to {email} via Vercel Gmail Proxy")
+                            return
+                except urllib.error.HTTPError as http_err:
+                    err_body = http_err.read().decode('utf-8', errors='ignore')
+                    logger.warning(f"[T@S Email] Vercel Proxy returned {http_err.code}: {err_body}, trying SMTP fallback...")
+                except Exception as ex:
+                    logger.warning(f"[T@S Email] Vercel Proxy request failed ({ex}), trying SMTP fallback...")
+
+            # Option 2: Fallback to direct Django send_mail (SMTP)
             try:
                 raw_from = getattr(settings, 'DEFAULT_FROM_EMAIL', '"T @ S" <noreply@tats.ai>')
                 parsed_name, parsed_addr = parseaddr(raw_from)
@@ -596,7 +632,7 @@ class EmailOTPVerification(models.Model):
                     html_message=html_message,
                     fail_silently=False
                 )
-                logger.info(f"[T@S Email] OTP successfully dispatched to {email} via SMTP")
+                logger.info(f"[T@S Email] OTP successfully dispatched to {email} via direct SMTP")
             except Exception as e:
                 logger.error(
                     f"[T@S Email Error] Failed to send email via SMTP ({e}). Fallback verification OTP: {raw_otp} for {email}"
