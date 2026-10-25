@@ -8,12 +8,14 @@
     --font-cursive: 'Caveat', cursive;
   }
 
-  body {
+  html, body {
     background-color: #FAF9F6;
     color: #1D1A23;
     font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 
   h1, h2, h3, .font-display {

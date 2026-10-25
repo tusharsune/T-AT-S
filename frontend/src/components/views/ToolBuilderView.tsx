@@ -707,7 +707,7 @@ export const ToolBuilderView: React.FC<ToolBuilderViewProps> = ({
       </div>
 
       {/* CLUSTER VISUAL TOOL BAR */}
-      <div className="bg-white rounded-3xl border border-[#FFE6DC] p-5 sm:p-6 shadow-sm flex flex-col gap-4">
+      <div className="bg-white rounded-3xl border border-[#FFE6DC] p-4 sm:p-6 shadow-sm flex flex-col gap-4">
         {/* Visual Bar Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-[#FFE6DC]">
           <div className="flex items-center gap-3">
@@ -782,7 +782,7 @@ export const ToolBuilderView: React.FC<ToolBuilderViewProps> = ({
               </button>
 
               {showTemplatesMenu && (
-                <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-xl border border-[#FFE6DC] p-2 z-50 animate-in fade-in zoom-in-95">
+                <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-xs bg-white rounded-2xl shadow-xl border border-[#FFE6DC] p-2 z-50 animate-in fade-in zoom-in-95">
                   <div className="px-3 py-1.5 border-b border-[#FFE6DC]/50 mb-1 flex items-center justify-between">
                     <span className="text-[11px] font-bold text-[#8B716B] uppercase font-['Outfit']">
                       Starter Templates
@@ -1128,7 +1128,7 @@ export const ToolBuilderView: React.FC<ToolBuilderViewProps> = ({
                 className="p-4 bg-[#FAF9F6] rounded-2xl border border-[#FFE6DC] shadow-xs flex flex-col gap-3 hover:shadow-sm transition-all"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-1">
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 flex-1 min-w-0">
                     <span className="material-symbols-outlined text-[#8B716B] text-[16px] cursor-grab">
                       drag_indicator
                     </span>

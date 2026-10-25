@@ -713,7 +713,7 @@ curl -X POST https://api.tats.internal/v1/voice/execute \\
           </div>
 
           {/* Tab Switcher */}
-          <div className="flex items-center justify-center sm:justify-start gap-2 border-b border-[#FFE6DC] pb-3">
+          <div className="flex items-center justify-start gap-2 border-b border-[#FFE6DC] pb-3 overflow-x-auto whitespace-nowrap p-1">
             {[
               { id: 'architecture', label: '1. Architecture & Pipeline', icon: 'account_tree' },
               { id: 'code', label: '2. Integration Code', icon: 'code' },

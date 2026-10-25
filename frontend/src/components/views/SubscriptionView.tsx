@@ -594,7 +594,7 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
               key={plan.id}
               className={`p-7 rounded-3xl flex flex-col justify-between transition-all relative ${
                 plan.popular
-                  ? 'bg-white border-2 border-[#FF7E5F] shadow-xl shadow-[#FF7E5F]/10 scale-[1.02]'
+                  ? 'bg-white border-2 border-[#FF7E5F] shadow-xl shadow-[#FF7E5F]/10 md:scale-[1.02]'
                   : 'bg-white border border-[#FFE6DC] shadow-sm hover:shadow-md'
               }`}
             >

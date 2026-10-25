@@ -200,7 +200,7 @@ export const TASWizard: React.FC<TASWizardProps> = ({ isOpen, onClose, onSuccess
       <div className="relative w-full max-w-4xl bg-white/95 backdrop-blur-2xl rounded-3xl shadow-[0_24px_64px_-12px_rgba(30,27,36,0.18),0_12px_32px_-4px_rgba(255,126,95,0.22)] border border-[#FFE6DC] overflow-hidden flex flex-col z-10 animate-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="px-6 sm:px-8 pt-6 pb-4 bg-white/80 border-b border-[#FFE6DC]/60 flex items-center justify-between">
+        <div className="px-4 sm:px-8 pt-6 pb-4 bg-white/80 border-b border-[#FFE6DC]/60 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <img
               src="/tas_final_logo_mark_small.svg"
@@ -325,7 +325,7 @@ export const TASWizard: React.FC<TASWizardProps> = ({ isOpen, onClose, onSuccess
           <>
             {/* 5-Step Horizontal Breadcrumb Indicator */}
             <div className="px-6 sm:px-8 py-3.5 bg-[#FAF9F6] border-b border-[#FFE6DC]/60">
-              <div className="grid grid-cols-5 gap-2 items-center">
+              <div className="grid grid-cols-5 gap-1 sm:gap-2 items-center">
                 {[
                   { num: 1, label: '1. Welcome' },
                   { num: 2, label: '2. Wake Word' },
@@ -373,7 +373,7 @@ export const TASWizard: React.FC<TASWizardProps> = ({ isOpen, onClose, onSuccess
                         ></div>
                       </div>
                       <span
-                        className={`font-['Outfit'] text-[11px] font-bold truncate transition-colors ${
+                        className={`font-['Outfit'] text-[10px] sm:text-[11px] font-bold truncate transition-colors ${
                           isCurrent
                             ? 'text-[#A53B22]'
                             : isPast

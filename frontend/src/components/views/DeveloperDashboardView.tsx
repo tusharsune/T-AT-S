@@ -396,7 +396,7 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
       {/* Main Workspace Split: Real-Time Stream (Left) & Service Management (Right) */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         {/* Session Telemetry Stream (Col 8) */}
-        <div className="xl:col-span-8 flex flex-col gap-4 bg-white p-6 rounded-3xl border border-[#FFE6DC] shadow-sm">
+        <div className="xl:col-span-8 flex flex-col gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-[#FFE6DC] shadow-sm">
           {/* Stream Header & Filters */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -410,7 +410,7 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
             </div>
 
             {/* Filter Pills */}
-            <div className="flex flex-wrap items-center gap-1 p-1 bg-[#FAF9F6] border border-[#FFE6DC] rounded-full text-xs">
+            <div className="flex flex-wrap items-center gap-1 p-1 bg-[#FAF9F6] border border-[#FFE6DC] rounded-2xl sm:rounded-full text-xs">
               {[
                 { id: 'all', label: 'All Calls' },
                 { id: 'voice', label: 'Voice Only' },
@@ -436,7 +436,7 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
           </div>
 
           {/* Telemetry Table */}
-          <div className="overflow-x-auto -mx-6 px-6">
+          <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
             <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
                 <tr className="bg-[#FAF9F6] text-[#8B716B] text-[11px] font-['Outfit'] uppercase tracking-wider border-b border-[#FFE6DC]">
@@ -597,7 +597,7 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-3 border-t border-[#FFE6DC]/60 text-xs text-[#57423D]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-3 border-t border-[#FFE6DC]/60 text-xs text-[#57423D] gap-2">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#00C2FF] animate-pulse"></span>
               <span>WebSocket Stream: Connected (wss://ap-south-1.tas-acoustic.net/feed)</span>

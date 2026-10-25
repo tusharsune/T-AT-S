@@ -665,7 +665,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
         </div>
 
         {/* Action Buttons & Lock Button */}
-        <div className="flex flex-wrap items-center gap-2 min-w-max">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <button
             onClick={() => {
               fetchGovernanceData();
@@ -692,7 +692,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
       </div>
 
       {/* Real Platform Metrics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white p-5 rounded-2xl border border-[#FFE6DC] shadow-sm flex flex-col gap-1">
           <div className="flex items-center justify-between text-[#8B716B]">
             <span className="text-[11px] font-bold font-['Outfit'] uppercase">Developers</span>
@@ -818,7 +818,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
           </div>
 
           {/* Users Table */}
-          <div className="overflow-x-auto -mx-6 px-6">
+          <div className="overflow-x-auto -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
             <table className="w-full text-left border-collapse min-w-[840px] text-xs">
               <thead>
                 <tr className="bg-[#FAF9F6] text-[#8B716B] text-[11px] font-['Outfit'] uppercase tracking-wider border-b border-[#FFE6DC]">
@@ -2135,7 +2135,7 @@ export const SuperAdminView: React.FC<SuperAdminViewProps> = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto -mx-6 px-6">
+          <div className="overflow-x-auto -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
             <table className="w-full text-left border-collapse min-w-[720px] text-xs">
               <thead>
                 <tr className="bg-[#FAF9F6] text-[#8B716B] text-[11px] font-['Outfit'] uppercase tracking-wider border-b border-[#FFE6DC]">

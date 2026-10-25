@@ -356,10 +356,10 @@ export function VoiceController() {
 
   return (
     <div className="w-full min-h-screen bg-[#FAF9F6] text-[#1D1A23] flex flex-col justify-between">
-      {/* Floating Quick-Action Shortcuts Dock (Landing Page Only) */}
+      {/* Floating Quick-Action Shortcuts Dock (Desktop/Tablet >= md) */}
       <aside
         aria-label="Landing quick shortcuts"
-        className="fixed right-3 sm:right-5 top-24 z-30 flex flex-col items-center gap-1.5 p-1.5 rounded-2xl bg-white/90 backdrop-blur-md border border-[#DEC0B9]/60 shadow-lg shadow-[#1D1A23]/5"
+        className="hidden md:flex fixed right-3 sm:right-5 top-24 z-30 flex-col items-center gap-1.5 p-1.5 rounded-2xl bg-white/90 backdrop-blur-md border border-[#DEC0B9]/60 shadow-lg shadow-[#1D1A23]/5"
       >
         {/* Back to Top with In-Place Flight Throttle & Lift Animation */}
         <button
@@ -466,8 +466,19 @@ export function VoiceController() {
         </button>
       </aside>
 
+      {/* Mobile Floating Back to Top Button */}
+      {hasScrolledDown && (
+        <button
+          onClick={handleScrollToTop}
+          className="md:hidden fixed bottom-5 right-4 z-40 w-11 h-11 rounded-full bg-gradient-to-tr from-[#FF7E5F] to-[#FFAE33] text-white shadow-xl flex items-center justify-center transition-all cursor-pointer active:scale-95 animate-in fade-in"
+          aria-label="Back to Top"
+        >
+          <span className="material-symbols-outlined text-[22px]">arrow_upward</span>
+        </button>
+      )}
+
       {/* Hero Section */}
-      <section id="top" className="relative w-full px-4 sm:px-8 pt-10 sm:pt-16 pb-16 overflow-hidden flex flex-col items-center text-center max-w-6xl mx-auto scroll-mt-24">
+      <section id="top" className="relative w-full px-4 sm:px-8 pt-8 sm:pt-16 pb-16 overflow-hidden flex flex-col items-center text-center max-w-6xl mx-auto scroll-mt-24">
         {/* Ambient Radial Coral Aura */}
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[720px] h-[340px] bg-gradient-to-b from-[#FF7E5F]/20 via-[#FFAE33]/15 to-transparent blur-3xl pointer-events-none rounded-full"></div>
 
@@ -495,7 +506,7 @@ export function VoiceController() {
 
         {/* Main Headline & Subtitle */}
         <div className="relative z-10 max-w-4xl mx-auto mb-6">
-          <h1 className="font-['Outfit'] text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#1D1A23] tracking-tight leading-[1.1] mb-5 max-w-4xl">
+          <h1 className="font-['Outfit'] text-3xl sm:text-5xl lg:text-6xl font-extrabold text-[#1D1A23] tracking-tight leading-[1.15] sm:leading-[1.1] mb-4 sm:mb-5 max-w-4xl">
             Build fast voice agents that actually run your code.
           </h1>
           <p className="font-['Manrope'] text-base sm:text-lg text-[#57423D] max-w-2xl mx-auto leading-relaxed">
@@ -864,19 +875,27 @@ export function VoiceController() {
           </div>
         </div>
 
-        <div className="rounded-3xl bg-[#1D1A23] text-white p-5 sm:p-7 border border-[#DEC0B9]/20 shadow-2xl relative">
-          <button
-            onClick={() => copyCode(
-              activeCodeTab === 'fastapi' ? fastApiCode :
-              activeCodeTab === 'django' ? djangoCode :
-              activeCodeTab === 'node' ? nodeCode : reactCode
-            )}
-            className="absolute top-5 right-5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-[15px]">content_copy</span>
-            <span>Copy Snippet</span>
-          </button>
-          <pre className="font-mono text-xs sm:text-sm text-emerald-300 leading-relaxed overflow-x-auto py-2">
+        <div className="rounded-3xl bg-[#1D1A23] text-white p-4 sm:p-7 border border-[#DEC0B9]/20 shadow-2xl relative">
+          <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500/80"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-green-500/80"></span>
+              <span className="text-[11px] font-mono text-white/50 ml-1.5 uppercase font-bold">{activeCodeTab} integration</span>
+            </div>
+            <button
+              onClick={() => copyCode(
+                activeCodeTab === 'fastapi' ? fastApiCode :
+                activeCodeTab === 'django' ? djangoCode :
+                activeCodeTab === 'node' ? nodeCode : reactCode
+              )}
+              className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[14px]">content_copy</span>
+              <span>Copy</span>
+            </button>
+          </div>
+          <pre className="font-mono text-xs sm:text-sm text-emerald-300 leading-relaxed overflow-x-auto py-1">
             <code>
               {activeCodeTab === 'fastapi' ? fastApiCode :
                activeCodeTab === 'django' ? djangoCode :

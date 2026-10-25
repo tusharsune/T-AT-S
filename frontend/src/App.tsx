@@ -52,6 +52,7 @@ export default function App() {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [authBannerNotice, setAuthBannerNotice] = useState<string>('');
   const [isAppCreateModalOpen, setIsAppCreateModalOpen] = useState(false);
   const [activeLegalModal, setActiveLegalModal] = useState<LegalModalType>(null);
@@ -131,6 +132,7 @@ export default function App() {
 
   // Navigation Guard: Protect internal workspaces from unauthenticated access & block landing if logged in
   const handleNavigate = (view: AppView) => {
+    setIsMobileNavOpen(false);
     if (view === 'auth') {
       setCurrentView('auth');
       return;
@@ -267,8 +269,6 @@ export default function App() {
       <Header
         currentView={currentView}
         onNavigate={handleNavigate}
-        selectedServiceId={selectedServiceId}
-        onSelectService={handleSelectService}
         onOpenCommand={() => setIsCommandOpen(true)}
         onOpenWizard={() => {
           if (!developer) {
@@ -284,6 +284,10 @@ export default function App() {
         activeAppId={activeAppId}
         onSelectApp={handleSelectApp}
         onOpenCreateApp={() => setIsAppCreateModalOpen(true)}
+        selectedServiceId={selectedServiceId}
+        onSelectService={handleSelectService}
+        isMobileNavOpen={isMobileNavOpen}
+        onToggleMobileNav={() => setIsMobileNavOpen((prev) => !prev)}
       />
 
       <div className="flex flex-1 pt-16">
@@ -294,12 +298,19 @@ export default function App() {
             onNavigate={handleNavigate}
             isMicActive={currentView === 'live-voice-playground'}
             isAdmin={Boolean(developer?.is_admin)}
+            isMobileOpen={isMobileNavOpen}
+            onCloseMobile={() => setIsMobileNavOpen(false)}
+            applications={applications}
+            activeAppId={activeAppId}
+            onSelectApp={handleSelectApp}
+            onOpenCreateApp={() => setIsAppCreateModalOpen(true)}
+            onLogout={handleLogout}
           />
         )}
 
         {/* Main Content View Container */}
         <main
-          className={`flex-1 transition-all ${
+          className={`flex-1 min-w-0 w-full transition-all ${
             developer && currentView !== 'landing' && currentView !== 'about' && currentView !== 'services' ? 'lg:pl-64' : 'w-full'
           }`}
         >

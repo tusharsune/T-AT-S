@@ -354,7 +354,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Tab Toggle */}
-        <div className="flex items-center gap-1.5 p-1.5 bg-[#FAF9F6] border border-[#FFE6DC] rounded-2xl">
+        <div className="flex items-center gap-1.5 p-1.5 bg-[#FAF9F6] border border-[#FFE6DC] rounded-2xl overflow-x-auto whitespace-nowrap max-w-full">
           <button
             onClick={() => setActiveTab('account')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${

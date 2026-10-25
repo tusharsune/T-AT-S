@@ -67,7 +67,7 @@ export const AppCreateModal: React.FC<AppCreateModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-md animate-in fade-in duration-200">
       <div className="fixed inset-0" onClick={handleFinish} />
 
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-[0_24px_64px_-12px_rgba(30,27,36,0.22)] border border-[#FFE6DC] p-6 sm:p-8 overflow-hidden z-10 animate-in zoom-in-95 duration-200 flex flex-col gap-5">
+      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-[0_24px_64px_-12px_rgba(30,27,36,0.22)] border border-[#FFE6DC] p-5 sm:p-8 max-h-[92vh] overflow-y-auto z-10 animate-in zoom-in-95 duration-200 flex flex-col gap-5">
         <div className="flex items-center justify-between pb-2 border-b border-[#FFE6DC]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#00C2FF] to-[#006688] flex items-center justify-center text-white shadow-sm">

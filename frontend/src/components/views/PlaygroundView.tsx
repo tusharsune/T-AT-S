@@ -372,7 +372,7 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
           </div>
 
           {/* Audio Peripheral Controls Bar */}
-          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 w-full max-w-2xl px-5 py-2.5 bg-[#FAF9F6] border border-[#FFE6DC] rounded-full shadow-sm text-xs">
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 w-full max-w-2xl px-5 py-2.5 bg-[#FAF9F6] border border-[#FFE6DC] rounded-2xl sm:rounded-full shadow-sm text-xs">
             {/* Sensitivity Slider */}
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-[16px] text-[#57423D]">graphic_eq</span>
@@ -613,7 +613,7 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
               <div className="bg-[#FFAE33] h-full" style={{ width: '25%' }}></div>
               <div className="bg-[#A53B22] h-full" style={{ width: '36%' }}></div>
             </div>
-            <div className="flex justify-between text-[10px] text-[#8B716B]">
+            <div className="grid grid-cols-2 sm:flex sm:justify-between gap-1 text-[10px] text-[#8B716B]">
               <span>Memory Search (8%)</span>
               <span>Intent Reasoning (31%)</span>
               <span>Live Action (25%)</span>
@@ -624,7 +624,7 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
       </div>
 
       {/* Preset Action Chips */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-3xl bg-white border border-[#FFE6DC] shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-3xl bg-white border border-[#FFE6DC] shadow-sm">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-bold text-[#57423D] font-['Outfit']">Sample Voice Prompts:</span>
           {PLAYGROUND_PRESETS.map((preset) => (
