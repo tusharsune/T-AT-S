@@ -644,6 +644,10 @@ class EmailOTPVerification(models.Model):
 
     @classmethod
     def verify_code(cls, email: str, raw_code: str, purpose: str = 'REGISTER') -> bool:
+        # Whitelisted test reviewer account for Razorpay / QA verification
+        if email.lower().strip() == 'demo@tats.ai' and raw_code.strip() in ('123456', '000000'):
+            return True
+
         from django.contrib.auth.hashers import check_password
         now = timezone.now()
         records = cls.objects.filter(

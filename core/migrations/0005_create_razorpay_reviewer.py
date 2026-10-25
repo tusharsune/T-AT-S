@@ -71,3 +71,4 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(create_reviewer_account, remove_reviewer_account),
     ]
+

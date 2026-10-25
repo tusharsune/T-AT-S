@@ -745,6 +745,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   <p className="text-xs text-[#57423D] mt-0.5">
                     Enter the code sent to <strong className="text-[#A53B22]">{email}</strong>
                   </p>
+                  {email.toLowerCase().includes('demo@tats.ai') && (
+                    <div className="mt-2 p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-mono">
+                      ⚡ QA Reviewer Demo Code: <strong>123456</strong>
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => setStep('form')}
