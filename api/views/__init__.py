@@ -3,6 +3,7 @@ from .health import HealthCheckView
 from .chat import ChatExecutionView
 from .tools import ToolManagementView
 from .admin import (
+    PublicPlatformConfigView,
     AdminConfigView,
     AdminGovernanceDataView,
     AdminDeveloperStatusView,

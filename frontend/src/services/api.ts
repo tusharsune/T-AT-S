@@ -516,15 +516,57 @@ export class TATSBackendAPI {
   }
 
   // ==========================================
-  // Super Admin Platform Config
+  // Dynamic Platform Config, Quotas & Live Cache
   // ==========================================
+  private static readonly CONFIG_CACHE_KEY = 'tats_platform_config';
+
+  public static getCachedPlatformConfig(): any {
+    try {
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem(this.CONFIG_CACHE_KEY);
+        if (cached) return JSON.parse(cached);
+      }
+    } catch {}
+    return null;
+  }
+
+  public static setCachedPlatformConfig(cfg: any): void {
+    try {
+      if (typeof window !== 'undefined' && cfg) {
+        localStorage.setItem(this.CONFIG_CACHE_KEY, JSON.stringify(cfg));
+      }
+    } catch {}
+  }
+
   public static async getPlatformConfig() {
-    const res = await fetch(`${API_BASE}/admin/config/`, {
-      method: 'GET',
-      headers: this.getHeaders(),
-    });
-    if (!res.ok) return null;
-    return await res.json();
+    // 1. Try public platform-config endpoint first (works for visitors, developers & admins)
+    try {
+      const pubRes = await fetch(`${API_BASE}/platform-config/`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      });
+      if (pubRes.ok) {
+        const data = await pubRes.json();
+        this.setCachedPlatformConfig(data);
+        return data;
+      }
+    } catch {}
+
+    // 2. Try admin endpoint if authenticated
+    try {
+      const res = await fetch(`${API_BASE}/admin/config/`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        this.setCachedPlatformConfig(data);
+        return data;
+      }
+    } catch {}
+
+    // 3. Fallback to cached config if available
+    return this.getCachedPlatformConfig();
   }
 
   public static async updatePlatformConfig(config: Record<string, any>) {
@@ -533,7 +575,16 @@ export class TATSBackendAPI {
       headers: this.getHeaders(),
       body: JSON.stringify(config),
     });
-    return { ok: res.ok, data: await res.json() };
+    const data = await res.json();
+    if (res.ok) {
+      const newConfig = data?.config || config;
+      this.setCachedPlatformConfig(newConfig);
+      // Dispatch real-time global event so open views instantly update without reload
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tats_config_updated', { detail: newConfig }));
+      }
+    }
+    return { ok: res.ok, data };
   }
 
   public static async getGovernanceData() {

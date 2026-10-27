@@ -3,6 +3,7 @@ from api.views import (
     HealthCheckView,
     ChatExecutionView,
     ToolManagementView,
+    PublicPlatformConfigView,
     AdminConfigView,
     AdminGovernanceDataView,
     AdminDeveloperStatusView,
@@ -92,8 +93,8 @@ urlpatterns = [
 
     # Super Admin Dynamic Config & Platform Governance
     path('admin/config/', AdminConfigView.as_view(), name='api-admin-config'),
-    path('platform-config/', AdminConfigView.as_view(), name='api-platform-config'),
-    path('plans/', AdminConfigView.as_view(), name='api-plans'),
+    path('platform-config/', PublicPlatformConfigView.as_view(), name='api-platform-config'),
+    path('plans/', PublicPlatformConfigView.as_view(), name='api-plans'),
     path('admin/governance/', AdminGovernanceDataView.as_view(), name='api-admin-governance'),
     path('admin/governance/security/', AdminGovernanceSecurityView.as_view(), name='api-admin-gov-security'),
     path('admin/governance/unlock/', AdminGovernanceUnlockView.as_view(), name='api-admin-gov-unlock'),

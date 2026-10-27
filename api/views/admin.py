@@ -9,6 +9,29 @@ from core.auth import DeveloperTokenAuthentication, IsDeveloperAuthenticated
 from api.serializers import PlatformConfigSerializer
 from api.views.auth import validate_strong_password
 
+
+class PublicPlatformConfigView(APIView):
+    """
+    Public platform configuration endpoint.
+    Retrieves current active plan pricing tiers, unit quotas, and multipliers.
+    Accessible to all users (visitors, registered developers, subscribers, administrators)
+    so that frontend cards always render live database prices and quotas without requiring admin credentials.
+    """
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(
+        tags=['Platform Configuration'],
+        summary='Get Public Platform Configuration',
+        description='Fetches current active platform monetization parameters: starter/growth plan price, enterprise price, monthly unit allowances, grace buffer percentage, and operation multipliers.',
+        responses={200: PlatformConfigSerializer}
+    )
+    def get(self, request):
+        config = PlatformConfig.get_active()
+        serializer = PlatformConfigSerializer(config)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class AdminConfigView(APIView):
     """
     Super Admin configuration endpoint.

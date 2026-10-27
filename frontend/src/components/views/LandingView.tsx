@@ -57,7 +57,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
   const [latencyProgress, setLatencyProgress] = useState(482);
   const [liveCallId, setLiveCallId] = useState('#vox-9921e');
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
-  const [platformConfig, setPlatformConfig] = useState<any>(null);
+  const [platformConfig, setPlatformConfig] = useState<any>(() => TATSBackendAPI.getCachedPlatformConfig());
   const [isScrollingToTop, setIsScrollingToTop] = useState(false);
   const [hasScrolledDown, setHasScrolledDown] = useState(false);
   const scrollSafetyTimeoutRef = useRef<any>(null);
@@ -80,13 +80,32 @@ export const LandingView: React.FC<LandingViewProps> = ({
   }, [isScrollingToTop]);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchConfig = async () => {
       try {
         const cfg = await TATSBackendAPI.getPlatformConfig();
-        if (cfg) setPlatformConfig(cfg);
+        if (cfg && isMounted) setPlatformConfig(cfg);
       } catch {}
     };
     fetchConfig();
+
+    const handleConfigUpdate = (e: any) => {
+      if (!isMounted) return;
+      if (e.detail) {
+        setPlatformConfig(e.detail);
+      } else {
+        fetchConfig();
+      }
+    };
+
+    window.addEventListener('tats_config_updated', handleConfigUpdate);
+    window.addEventListener('focus', fetchConfig);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('tats_config_updated', handleConfigUpdate);
+      window.removeEventListener('focus', fetchConfig);
+    };
   }, []);
 
   const utterances = [
@@ -209,9 +228,11 @@ export const LandingView: React.FC<LandingViewProps> = ({
             });
 
             if (verifyRes.ok) {
+              const currentGrowthUnits = (platformConfig?.growth_tier_units || 50000).toLocaleString('en-IN');
+              const currentGrowthPrice = (platformConfig?.growth_price_inr || platformConfig?.starter_price_inr || 1999).toLocaleString('en-IN');
               onShowToast(
                 'Growth Plan Activated!',
-                `Payment of ₹4,999 captured. 50,000 Action Units credited.`,
+                `Payment of ₹${currentGrowthPrice} captured. ${currentGrowthUnits} Action Units credited.`,
                 'success'
               );
               if (onRefreshApps) onRefreshApps();
@@ -242,9 +263,10 @@ export const LandingView: React.FC<LandingViewProps> = ({
         });
 
         if (verifyRes.ok) {
+          const currentGrowthUnits = (platformConfig?.growth_tier_units || 50000).toLocaleString('en-IN');
           onShowToast(
             'Growth Plan Activated (Test Mode)',
-            `Order ${orderData.order_id} verified. 50,000 Units loaded. Add RAZORPAY_KEY_ID in .env for live bank checkout.`,
+            `Order ${orderData.order_id} verified. ${currentGrowthUnits} Units loaded. Add RAZORPAY_KEY_ID in .env for live bank checkout.`,
             'success'
           );
           if (onRefreshApps) onRefreshApps();

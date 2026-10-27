@@ -35,6 +35,7 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
         const platformCfg = await TATSBackendAPI.getPlatformConfig();
         const freeQuota = platformCfg?.free_tier_units || 2000;
         const growthQuota = platformCfg?.growth_tier_units || 50000;
+        const enterpriseQuota = platformCfg?.enterprise_tier_units || 250000;
 
         if (appsRes && appsRes.applications && appsRes.applications.length > 0) {
           const mainApp = appsRes.applications[0];
@@ -42,11 +43,11 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
           setAppId(mainApp.id);
           setToolsCount(mainApp.tools_count || 0);
           setMonthlyUnitsUsed(mainApp.monthly_units_used || 0);
-          setMonthlyQuota(
-            mainApp.plan_tier === 'GROWTH' || mainApp.plan_tier === 'GROWTH_STARTUP'
-              ? growthQuota
-              : freeQuota
-          );
+          const t = String(mainApp.plan_tier || '').toUpperCase();
+          const effectiveQuota = t.includes('ENTERPRISE')
+            ? enterpriseQuota
+            : (t.includes('GROWTH') || t.includes('STARTER') ? growthQuota : freeQuota);
+          setMonthlyQuota(effectiveQuota);
 
           // Fetch real telemetry sessions for this app
           try {
@@ -91,6 +92,16 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
       }
     };
     fetchLiveData();
+
+    const handleConfigSync = () => {
+      fetchLiveData();
+    };
+    window.addEventListener('tats_config_updated', handleConfigSync);
+    window.addEventListener('focus', handleConfigSync);
+    return () => {
+      window.removeEventListener('tats_config_updated', handleConfigSync);
+      window.removeEventListener('focus', handleConfigSync);
+    };
   }, [activeApiKey]);
 
   const PAGE_SIZE = 25;
@@ -320,14 +331,14 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
                 Unit Burn Rate
               </span>
               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#84240D] px-2.5 py-0.5 rounded-full bg-[#FFDAD2]">
-                84.2% Quota
+                {monthlyQuota > 0 ? ((monthlyUnitsUsed / monthlyQuota) * 100).toFixed(1) : '0.0'}% Quota
               </span>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
               <span className="font-['Outfit'] text-4xl sm:text-5xl font-extrabold text-[#1D1A23]">
                 {monthlyUnitsUsed >= 1000 ? `${(monthlyUnitsUsed / 1000).toFixed(1)}k` : monthlyUnitsUsed}
               </span>
-              <span className="font-['Outfit'] text-lg text-[#57423D] font-semibold">/ {(monthlyQuota / 1000).toFixed(0)}k</span>
+              <span className="font-['Outfit'] text-lg text-[#57423D] font-semibold">/ {monthlyQuota >= 1000 ? `${(monthlyQuota / 1000).toLocaleString('en-IN')}k` : monthlyQuota}</span>
             </div>
             <div className="flex items-center gap-1.5 text-[#57423D] text-xs">
               <span className="material-symbols-outlined text-[#FF7E5F] text-[16px]">shield</span>

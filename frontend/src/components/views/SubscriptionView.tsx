@@ -28,7 +28,7 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [paymentSuccess, setPaymentSuccess] = useState<boolean>(false);
   const [successNotice, setSuccessNotice] = useState<string>('');
-  const [platformConfig, setPlatformConfig] = useState<any>(null);
+  const [platformConfig, setPlatformConfig] = useState<any>(() => TATSBackendAPI.getCachedPlatformConfig());
 
   // Transition / Plan Conflict State
   const [showTransitionModal, setShowTransitionModal] = useState<boolean>(false);
@@ -59,15 +59,34 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
 
   const currentTier = normalizeTier(activeApp?.plan_tier);
 
-  // Fetch dynamic platform pricing set by Admin
+  // Fetch dynamic platform pricing set by Admin with real-time reactive sync
   useEffect(() => {
+    let isMounted = true;
     const fetchConfig = async () => {
       try {
         const cfg = await TATSBackendAPI.getPlatformConfig();
-        if (cfg) setPlatformConfig(cfg);
+        if (cfg && isMounted) setPlatformConfig(cfg);
       } catch {}
     };
     fetchConfig();
+
+    const handleConfigUpdate = (e: any) => {
+      if (!isMounted) return;
+      if (e.detail) {
+        setPlatformConfig(e.detail);
+      } else {
+        fetchConfig();
+      }
+    };
+
+    window.addEventListener('tats_config_updated', handleConfigUpdate);
+    window.addEventListener('focus', fetchConfig);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('tats_config_updated', handleConfigUpdate);
+      window.removeEventListener('focus', fetchConfig);
+    };
   }, []);
 
   const loadRazorpayScript = (): Promise<boolean> => {
