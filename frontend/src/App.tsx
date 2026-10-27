@@ -383,6 +383,10 @@ export default function App() {
               <PlaygroundView
                 onNavigate={handleNavigate}
                 onShowToast={addToast}
+                applications={applications}
+                activeAppId={activeAppId}
+                developer={developer}
+                onSelectApp={handleSelectApp}
               />
             )}
 
