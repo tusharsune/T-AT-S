@@ -30,6 +30,32 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
   const [successNotice, setSuccessNotice] = useState<string>('');
   const [platformConfig, setPlatformConfig] = useState<any>(() => TATSBackendAPI.getCachedPlatformConfig());
 
+  // Cancellation & Invoice History State
+  const [showCancelPlanModal, setShowCancelPlanModal] = useState<boolean>(false);
+  const [cancelReason, setCancelReason] = useState<string>('Testing & Prototyping Phase Completed');
+  const [billingHistory, setBillingHistory] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
+
+  // Token Management & Guardrails State
+  const [dailyCapLimit, setDailyCapLimit] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(`tats_daily_limit_${activeAppId}`);
+      return saved ? Number(saved) : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [alertThresholdPct, setAlertThresholdPct] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(`tats_alert_thresh_${activeAppId}`);
+      return saved ? Number(saved) : 85;
+    } catch {
+      return 85;
+    }
+  });
+  const [isTogglingPause, setIsTogglingPause] = useState<boolean>(false);
+
   // Transition / Plan Conflict State
   const [showTransitionModal, setShowTransitionModal] = useState<boolean>(false);
   const [targetTransitionPlan, setTargetTransitionPlan] = useState<any>(null);
@@ -101,6 +127,93 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
     });
+  };
+
+  // Fetch billing history & invoices
+  const loadBillingHistory = async () => {
+    if (!developer) return;
+    setIsLoadingHistory(true);
+    try {
+      const res = await TATSBackendAPI.getBillingHistory();
+      if (res && res.orders) {
+        setBillingHistory(res.orders);
+      }
+    } catch {} finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (developer) {
+      loadBillingHistory();
+    }
+  }, [developer]);
+
+  // Execute Subscription Cancellation
+  const executeCancelSubscription = async () => {
+    if (!activeApp) return;
+    setIsProcessing(true);
+    try {
+      const res = await TATSBackendAPI.cancelSubscription(activeApp.id, cancelReason);
+      if (res.ok) {
+        setShowCancelPlanModal(false);
+        await onRefreshApps();
+        await loadBillingHistory();
+        onShowToast(
+          'Subscription Cancelled',
+          `Application "${activeApp.app_name}" has been downgraded to Developer Free tier. Unspent booster credits remain active.`,
+          'success'
+        );
+      } else {
+        onShowToast('Cancellation Notice', res.data?.error || 'Could not cancel plan.', 'warning');
+      }
+    } catch (err: any) {
+      onShowToast('Error', err.message || 'Failed to cancel subscription.', 'warning');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Toggle Cluster Execution Pause
+  const handleToggleClusterPause = async () => {
+    if (!activeApp) return;
+    setIsTogglingPause(true);
+    try {
+      const nextActive = !activeApp.is_active;
+      const res = await TATSBackendAPI.toggleAppActive(activeApp.id, nextActive);
+      if (res.ok) {
+        await onRefreshApps();
+        onShowToast(
+          nextActive ? 'Cluster Execution Active' : 'Cluster Execution Paused',
+          nextActive
+            ? `Application "${activeApp.app_name}" is now executing actions.`
+            : `Application "${activeApp.app_name}" paused. All token burn is frozen.`,
+          nextActive ? 'success' : 'info'
+        );
+      } else {
+        onShowToast('Failed', res.data?.error || 'Could not update cluster state.', 'warning');
+      }
+    } catch (e: any) {
+      onShowToast('Error', e.message || 'Failed to update cluster state.', 'warning');
+    } finally {
+      setIsTogglingPause(false);
+    }
+  };
+
+  const handleSaveDailyCap = (limit: number) => {
+    setDailyCapLimit(limit);
+    try {
+      localStorage.setItem(`tats_daily_limit_${activeApp?.id}`, String(limit));
+      onShowToast('Token Guardrail Saved', limit > 0 ? `Daily token cap set to ${limit.toLocaleString('en-IN')} units.` : 'Daily token cap disabled (unlimited).', 'success');
+    } catch {}
+  };
+
+  const handleSaveAlertThreshold = (pct: number) => {
+    setAlertThresholdPct(pct);
+    try {
+      localStorage.setItem(`tats_alert_thresh_${activeApp?.id}`, String(pct));
+      onShowToast('Quota Alert Saved', `Low-token warning email will trigger when ${pct}% of monthly quota is consumed.`, 'success');
+    } catch {}
   };
 
   // Base checkout executor
@@ -489,35 +602,75 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
         </div>
       </div>
 
-      {/* Active Subscription Banner with 1-Click Credit Top-up Option */}
+      {/* Active Subscription Management Bar with Cancel & Controls */}
       {currentTier !== 'FREE' && activeApp && (
-        <div className="p-5 rounded-3xl bg-white border-2 border-[#FFE6DC] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#FF7E5F] to-[#FFAE33] text-white flex items-center justify-center shadow-md">
-              <span className="material-symbols-outlined text-[24px]">verified</span>
+        <div className="p-5 sm:p-6 rounded-3xl bg-white border-2 border-[#FFE6DC] shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-5 animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#FF7E5F] to-[#FFAE33] text-white flex items-center justify-center shadow-md shadow-[#FF7E5F]/20 shrink-0">
+              <span className="material-symbols-outlined text-[26px]">verified</span>
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-['Outfit'] font-bold text-base text-[#1D1A23]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-['Outfit'] font-bold text-base sm:text-lg text-[#1D1A23]">
                   Active Plan: {currentTier === 'GROWTH' ? 'Growth Startup' : 'Scale Enterprise'}
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider font-mono">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider font-mono">
                   ACTIVE ON {activeApp.app_name}
                 </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono ${
+                  activeApp.is_active ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {activeApp.is_active ? 'Processing Calls' : 'Token Freeze (Paused)'}
+                </span>
               </div>
-              <p className="text-xs text-[#57423D] mt-0.5">
-                Need more actions without changing your billing tier? Top up credit packs instantly. Credits roll forward without altering your renewal date.
-              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-[#57423D]">
+                <span>
+                  <strong>Monthly Quota:</strong> {currentTier === 'GROWTH' ? growthUnits.toLocaleString('en-IN') : enterpriseUnits.toLocaleString('en-IN')} units
+                </span>
+                <span className="text-[#8B716B]">&bull;</span>
+                <span>
+                  <strong>Renewal:</strong> {activeApp.plan_expires_at ? new Date(activeApp.plan_expires_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Rolling Monthly'}
+                </span>
+                <span className="text-[#8B716B]">&bull;</span>
+                <span>
+                  <strong>Auto-Renew:</strong> Active
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full lg:w-auto justify-end">
+            <button
+              onClick={handleToggleClusterPause}
+              disabled={isTogglingPause}
+              className={`px-3.5 py-2.5 rounded-full font-['Outfit'] font-bold text-xs border transition-all flex items-center gap-1.5 ${
+                activeApp.is_active
+                  ? 'bg-[#FFF8EB] hover:bg-[#FEF08A] text-[#854D0E] border-[#FDE047]'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+              }`}
+              title={activeApp.is_active ? 'Pause cluster to temporarily freeze token burn' : 'Resume cluster execution'}
+            >
+              <span className="material-symbols-outlined text-[16px]">
+                {activeApp.is_active ? 'pause_circle' : 'play_circle'}
+              </span>
+              <span>{activeApp.is_active ? 'Freeze Token Burn' : 'Resume Execution'}</span>
+            </button>
+
             <button
               onClick={() => setShowTopupModal(true)}
-              className="px-4 py-2.5 rounded-full bg-gradient-to-r from-[#FF7E5F] to-[#FF5F45] text-white font-['Outfit'] font-bold text-xs shadow-md shadow-[#FF5F45]/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2"
+              className="px-4 py-2.5 rounded-full bg-gradient-to-r from-[#FF7E5F] to-[#FF5F45] text-white font-['Outfit'] font-bold text-xs shadow-md shadow-[#FF5F45]/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-1.5"
             >
-              <span className="material-symbols-outlined text-[18px]">bolt</span>
-              <span>Top-Up Action Credits</span>
+              <span className="material-symbols-outlined text-[16px]">bolt</span>
+              <span>Top-Up Credits</span>
+            </button>
+
+            <button
+              onClick={() => setShowCancelPlanModal(true)}
+              className="px-3.5 py-2.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-['Outfit'] font-bold text-xs border border-rose-200 transition-all flex items-center gap-1.5"
+              title="Cancel your paid plan and revert cluster to Developer Free"
+            >
+              <span className="material-symbols-outlined text-[16px]">cancel</span>
+              <span>Cancel Plan</span>
             </button>
           </div>
         </div>
@@ -1045,6 +1198,388 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
           </p>
         </div>
       </div>
+
+      {/* SECTION A: Token Optimization & Budget Guardrails */}
+      <div className="bg-white p-6 sm:p-7 rounded-3xl border border-[#FFE6DC] shadow-sm flex flex-col gap-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#FFE6DC] pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#FFDAD2] text-[#A53B22] flex items-center justify-center">
+              <span className="material-symbols-outlined text-[20px]">tune</span>
+            </div>
+            <div>
+              <h3 className="font-['Outfit'] text-base font-bold text-[#1D1A23]">
+                Token Optimization & Budget Guardrails
+              </h3>
+              <p className="text-xs text-[#57423D]">
+                Configure guardrails to pace token burn, prevent accidental runaway loops, and manage quota intelligently.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono bg-purple-50 text-purple-700 border border-purple-200 self-start sm:self-auto">
+            Cluster Guard: {activeApp ? activeApp.app_name : 'Default'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Guard 1: Daily Unit Burn Cap */}
+          <div className="p-4 rounded-2xl bg-[#FAF9F6] border border-[#FFE6DC] flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-[#1D1A23]">Daily Spending Limit</span>
+                <span className="material-symbols-outlined text-[#A53B22] text-[18px]">speed</span>
+              </div>
+              <p className="text-[11px] text-[#57423D] mt-1">
+                Caps maximum action units consumed within a single 24-hour window.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {[
+                { val: 0, label: 'No Limit' },
+                { val: 500, label: '500' },
+                { val: 1000, label: '1,000' },
+                { val: 2500, label: '2,500' },
+                { val: 5000, label: '5,000' },
+              ].map((preset) => (
+                <button
+                  key={preset.val}
+                  type="button"
+                  onClick={() => handleSaveDailyCap(preset.val)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all border ${
+                    dailyCapLimit === preset.val
+                      ? 'bg-[#A53B22] text-white border-[#A53B22] shadow-sm'
+                      : 'bg-white text-[#57423D] border-[#FFE6DC] hover:border-[#A53B22]'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Guard 2: Low-Balance Warning Alert */}
+          <div className="p-4 rounded-2xl bg-[#FAF9F6] border border-[#FFE6DC] flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-[#1D1A23]">Quota Alert Sensitivity</span>
+                <span className="material-symbols-outlined text-[#FF7E5F] text-[18px]">notifications_active</span>
+              </div>
+              <p className="text-[11px] text-[#57423D] mt-1">
+                Email dispatch trigger to warn you before monthly units are exhausted.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {[
+                { pct: 75, label: 'At 75%' },
+                { pct: 85, label: 'At 85%' },
+                { pct: 95, label: 'At 95%' },
+              ].map((opt) => (
+                <button
+                  key={opt.pct}
+                  type="button"
+                  onClick={() => handleSaveAlertThreshold(opt.pct)}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all border ${
+                    alertThresholdPct === opt.pct
+                      ? 'bg-[#A53B22] text-white border-[#A53B22] shadow-sm'
+                      : 'bg-white text-[#57423D] border-[#FFE6DC] hover:border-[#A53B22]'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Guard 3: Emergency Cluster Freeze */}
+          <div className="p-4 rounded-2xl bg-[#FAF9F6] border border-[#FFE6DC] flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-[#1D1A23]">Cluster Kill-Switch</span>
+                <span className={`material-symbols-outlined text-[18px] ${activeApp?.is_active ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {activeApp?.is_active ? 'lock_open' : 'lock'}
+                </span>
+              </div>
+              <p className="text-[11px] text-[#57423D] mt-1">
+                Temporarily pause action execution during webhook or server maintenance.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleClusterPause}
+              disabled={isTogglingPause || !activeApp}
+              className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
+                activeApp?.is_active
+                  ? 'bg-white text-[#854D0E] border-[#FDE047] hover:bg-[#FFF8EB]'
+                  : 'bg-emerald-600 text-white border-emerald-600'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px]">
+                {activeApp?.is_active ? 'pause' : 'play_arrow'}
+              </span>
+              <span>{activeApp?.is_active ? 'Pause Token Burn' : 'Resume Processing'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION B: Billing History & Invoices Table */}
+      <div className="bg-white p-6 sm:p-7 rounded-3xl border border-[#FFE6DC] shadow-sm flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#FFE6DC] pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#EDE5F2] text-[#4A3B52] flex items-center justify-center">
+              <span className="material-symbols-outlined text-[20px]">receipt_long</span>
+            </div>
+            <div>
+              <h3 className="font-['Outfit'] text-base font-bold text-[#1D1A23]">
+                Invoices & Transaction History
+              </h3>
+              <p className="text-xs text-[#57423D]">
+                Official tax invoices, subscription receipts, and credit booster payment records.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={loadBillingHistory}
+            disabled={isLoadingHistory}
+            className="flex items-center gap-1 text-xs font-bold text-[#A53B22] hover:underline self-start sm:self-auto"
+          >
+            <span className={`material-symbols-outlined text-[15px] ${isLoadingHistory ? 'animate-spin' : ''}`}>
+              refresh
+            </span>
+            <span>Refresh History</span>
+          </button>
+        </div>
+
+        {billingHistory.length > 0 ? (
+          <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-[#FFE6DC] text-[#8B716B] font-['Outfit'] uppercase tracking-wider text-[10px]">
+                  <th className="py-2.5 pr-4 font-bold">Date & Time</th>
+                  <th className="py-2.5 px-4 font-bold">Plan / Item</th>
+                  <th className="py-2.5 px-4 font-bold">Units Credited</th>
+                  <th className="py-2.5 px-4 font-bold">Amount</th>
+                  <th className="py-2.5 px-4 font-bold">Order ID</th>
+                  <th className="py-2.5 px-4 font-bold">Status</th>
+                  <th className="py-2.5 pl-4 font-bold text-right">Invoice</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#FFE6DC]/60 font-mono text-[11px]">
+                {billingHistory.map((order) => (
+                  <tr key={order.id} className="hover:bg-[#FAF9F6] transition-colors">
+                    <td className="py-3 pr-4 text-[#57423D] whitespace-nowrap">
+                      {order.created_at}
+                    </td>
+                    <td className="py-3 px-4 font-['Outfit'] font-bold text-[#1D1A23] whitespace-nowrap">
+                      {order.plan_tier}
+                    </td>
+                    <td className="py-3 px-4 text-[#006688] font-bold whitespace-nowrap">
+                      +{order.units_credited?.toLocaleString('en-IN')} units
+                    </td>
+                    <td className="py-3 px-4 font-bold text-[#1D1A23] whitespace-nowrap">
+                      ₹{order.amount_inr?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-3 px-4 text-[#8B716B] text-[10px] whitespace-nowrap">
+                      {order.order_id}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        order.status === 'PAID'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : order.status === 'CREATED'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {order.status}
+                      </span>
+                    </td>
+                    <td className="py-3 pl-4 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => setSelectedInvoice(order)}
+                        className="px-2.5 py-1 rounded-lg bg-[#FAF9F6] hover:bg-[#F3EBF8] text-[#A53B22] font-['Outfit'] font-bold text-[11px] border border-[#FFE6DC] transition-all inline-flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">visibility</span>
+                        <span>View Receipt</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="py-8 text-center text-[#8B716B] text-xs">
+            <span className="material-symbols-outlined text-[32px] text-[#FF7E5F] block mb-1">receipt</span>
+            <span>No previous transaction orders found on this developer account yet.</span>
+          </div>
+        )}
+      </div>
+
+      {/* Plan Cancellation Modal */}
+      {showCancelPlanModal && activeApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="fixed inset-0" onClick={() => setShowCancelPlanModal(false)} />
+          <div className="relative w-full max-w-md bg-white rounded-3xl p-6 sm:p-7 border border-[#FFE6DC] shadow-2xl flex flex-col gap-4 z-10 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center shadow-md shrink-0 mx-auto">
+              <span className="material-symbols-outlined text-[26px]">cancel</span>
+            </div>
+
+            <div className="text-center">
+              <h3 className="font-['Outfit'] text-lg font-bold text-[#1D1A23]">
+                Cancel Subscription for "{activeApp.app_name}"?
+              </h3>
+              <p className="text-xs text-[#57423D] mt-1.5 leading-relaxed">
+                Your application will revert to the <strong>Developer Free</strong> plan ({freeUnits.toLocaleString('en-IN')} units/mo).
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#FAF9F6] border border-[#FFE6DC] text-xs text-[#57423D] flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-emerald-800 font-semibold">
+                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                <span>Unspent booster credits will remain active in your cluster.</span>
+              </div>
+              <div className="flex items-center gap-2 text-emerald-800 font-semibold">
+                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                <span>Zero data loss: tools, API keys, and configurations remain intact.</span>
+              </div>
+              <div className="flex items-center gap-2 text-[#854D0E]">
+                <span className="material-symbols-outlined text-[16px]">info</span>
+                <span>Concurrent voice stream limit will revert to 1.</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-[#1D1A23] uppercase tracking-wider mb-1.5 font-['Outfit']">
+                Help Us Improve: Reason for Cancellation
+              </label>
+              <select
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-[#FFE6DC] text-xs text-[#1D1A23] bg-white focus:outline-none focus:ring-2 focus:ring-[#A53B22]"
+              >
+                <option value="Testing & Prototyping Phase Completed">Testing & Prototyping Phase Completed</option>
+                <option value="Need to reduce monthly budget">Need to reduce monthly budget</option>
+                <option value="Switching to a different application cluster">Switching to a different application cluster</option>
+                <option value="Features not needed right now">Features not needed right now</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCancelPlanModal(false)}
+                className="flex-1 py-2.5 px-4 rounded-full bg-[#FAF9F6] hover:bg-[#F3EBF8] text-[#57423D] font-bold text-xs border border-[#FFE6DC] transition-all"
+              >
+                Keep Plan
+              </button>
+              <button
+                type="button"
+                onClick={executeCancelSubscription}
+                disabled={isProcessing}
+                className="flex-1 py-2.5 px-4 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition-all flex items-center justify-center gap-1.5"
+              >
+                {isProcessing ? (
+                  <>
+                    <span className="material-symbols-outlined text-[15px] animate-spin">refresh</span>
+                    <span>Cancelling...</span>
+                  </>
+                ) : (
+                  <span>Confirm Cancel</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Receipt Modal */}
+      {selectedInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="fixed inset-0" onClick={() => setSelectedInvoice(null)} />
+          <div className="relative w-full max-w-lg bg-white rounded-3xl p-6 sm:p-8 border border-[#FFE6DC] shadow-2xl flex flex-col gap-5 z-10 animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-[#FFE6DC] pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-['Outfit'] text-2xl font-black text-[#A53B22]">T @ S</span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold font-mono">PAID RECEIPT</span>
+                </div>
+                <p className="text-[11px] text-[#57423D] mt-0.5 font-mono">Talk · Decide · Solve Acoustic Engine</p>
+              </div>
+              <button
+                onClick={() => setSelectedInvoice(null)}
+                className="w-8 h-8 rounded-full bg-[#FAF9F6] hover:bg-[#FFDAD2] text-[#57423D] flex items-center justify-center transition-all"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            {/* Receipt Details */}
+            <div className="grid grid-cols-2 gap-3 text-xs bg-[#FAF9F6] p-4 rounded-2xl border border-[#FFE6DC]">
+              <div>
+                <span className="text-[10px] text-[#8B716B] uppercase font-bold block font-['Outfit']">Billed To</span>
+                <span className="font-bold text-[#1D1A23]">{developer?.name || 'Developer'}</span>
+                <span className="text-[11px] text-[#57423D] block">{developer?.email}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-[#8B716B] uppercase font-bold block font-['Outfit']">Invoice Date</span>
+                <span className="font-mono text-[#1D1A23]">{selectedInvoice.created_at}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-[#8B716B] uppercase font-bold block font-['Outfit']">Order Reference</span>
+                <span className="font-mono text-[11px] text-[#1D1A23]">{selectedInvoice.order_id}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-[#8B716B] uppercase font-bold block font-['Outfit']">Payment Gateway ID</span>
+                <span className="font-mono text-[11px] text-[#1D1A23]">{selectedInvoice.payment_id}</span>
+              </div>
+            </div>
+
+            {/* Line Items */}
+            <div className="border border-[#FFE6DC] rounded-2xl overflow-hidden text-xs">
+              <div className="bg-[#FAF9F6] px-4 py-2 border-b border-[#FFE6DC] flex justify-between font-bold text-[#8B716B] uppercase text-[10px] font-['Outfit']">
+                <span>Description</span>
+                <span>Amount</span>
+              </div>
+              <div className="p-4 flex justify-between items-center">
+                <div>
+                  <span className="font-bold text-[#1D1A23] text-sm block font-['Outfit']">{selectedInvoice.plan_tier} Subscription</span>
+                  <span className="text-xs text-[#006688] font-bold">+{selectedInvoice.units_credited?.toLocaleString('en-IN')} Action Units Credited</span>
+                  <span className="text-[11px] text-[#8B716B] block">Application Cluster: {selectedInvoice.app_name}</span>
+                </div>
+                <span className="font-bold text-base text-[#1D1A23] font-mono">
+                  ₹{selectedInvoice.amount_inr?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="bg-[#FAF9F6] p-4 border-t border-[#FFE6DC] flex justify-between items-center font-bold text-sm">
+                <span>Total Amount Paid (INR)</span>
+                <span className="text-[#A53B22] text-lg font-mono">
+                  ₹{selectedInvoice.amount_inr?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex-1 py-2.5 px-4 rounded-full bg-[#1D1A23] hover:bg-[#34303E] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[15px]">print</span>
+                <span>Print / Save PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedInvoice(null)}
+                className="py-2.5 px-6 rounded-full bg-[#FAF9F6] hover:bg-[#F3EBF8] text-[#57423D] font-bold text-xs border border-[#FFE6DC] transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Small Screen Popup: Switch Cluster to Developer Free Tier (Replaces browser window.confirm) */}
       {showFreeDowngradeModal && (

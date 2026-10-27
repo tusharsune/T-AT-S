@@ -497,3 +497,40 @@ class RazorpayWebhookView(APIView):
         return Response({'status': 'webhook received'}, status=status.HTTP_200_OK)
 
 
+class DeveloperBillingHistoryView(APIView):
+    """
+    Returns payment orders and invoices for the authenticated developer.
+    Allows developers to view their transaction history, amounts paid, units credited, and invoice receipts.
+    """
+    authentication_classes = [DeveloperTokenAuthentication]
+    permission_classes = [IsDeveloperAuthenticated]
+
+    @extend_schema(
+        tags=['Billing & Payments'],
+        summary='Get Developer Payment History & Invoices',
+        description='Fetches past payment orders, receipts, plan activations, and credit booster history for the logged-in developer.'
+    )
+    def get(self, request):
+        dev = request.developer
+        orders = PaymentOrder.objects.filter(developer=dev).select_related('application').order_by('-created_at')
+        orders_data = []
+        for o in orders:
+            orders_data.append({
+                'id': str(o.id),
+                'order_id': o.razorpay_order_id,
+                'payment_id': o.razorpay_payment_id or 'Pending',
+                'plan_tier': o.plan_tier,
+                'amount_inr': round(o.amount / 100, 2),
+                'currency': o.currency,
+                'status': o.status,
+                'units_credited': o.units_credited,
+                'app_name': o.application.app_name if o.application else 'Default Cluster',
+                'app_id': str(o.application.id) if o.application else None,
+                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            })
+        return Response({
+            'orders': orders_data,
+            'count': len(orders_data)
+        }, status=status.HTTP_200_OK)
+
+

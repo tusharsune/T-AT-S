@@ -47,5 +47,6 @@ from .notifications import (
 from .payments import (
     RazorpayCreateOrderView,
     RazorpayVerifyView,
-    RazorpayWebhookView
+    RazorpayWebhookView,
+    DeveloperBillingHistoryView
 )

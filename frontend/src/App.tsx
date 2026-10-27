@@ -340,6 +340,10 @@ export default function App() {
               <DeveloperDashboardView
                 onNavigate={handleNavigate}
                 onShowToast={addToast}
+                activeAppId={activeAppId}
+                applications={applications}
+                developer={developer}
+                onRefreshApps={loadApplications}
               />
             )}
 

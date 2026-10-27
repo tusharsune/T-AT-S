@@ -154,6 +154,9 @@ class ApplicationDetailView(APIView):
         if wake_word_policy in ['CUSTOM', 'LOCKED']:
             app.wake_word_policy = wake_word_policy
 
+        if 'is_active' in request.data:
+            app.is_active = bool(request.data.get('is_active'))
+
         app.save()
         serializer = ApplicationDetailSerializer(app)
         return Response({

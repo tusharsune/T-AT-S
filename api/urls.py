@@ -37,7 +37,8 @@ from api.views import (
     NotificationClearAllView,
     RazorpayCreateOrderView,
     RazorpayVerifyView,
-    RazorpayWebhookView
+    RazorpayWebhookView,
+    DeveloperBillingHistoryView
 )
 
 urlpatterns = [
@@ -77,6 +78,7 @@ urlpatterns = [
     path('payments/create-order/', RazorpayCreateOrderView.as_view(), name='api-payments-create-order'),
     path('payments/verify/', RazorpayVerifyView.as_view(), name='api-payments-verify'),
     path('payments/webhook/', RazorpayWebhookView.as_view(), name='api-payments-webhook'),
+    path('payments/history/', DeveloperBillingHistoryView.as_view(), name='api-payments-history'),
 
     # End-User Voice Preferences & Security
     path('users/<str:client_user_id>/config/', EndUserConfigView.as_view(), name='api-user-config'),

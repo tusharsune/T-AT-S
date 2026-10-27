@@ -5,12 +5,48 @@ import { TATSBackendAPI } from '../../services/api';
 interface DeveloperDashboardViewProps {
   onNavigate: (view: AppView) => void;
   onShowToast: (title: string, desc?: string, type?: 'success' | 'info' | 'warning') => void;
+  activeAppId?: string | null;
+  applications?: any[];
+  developer?: any;
+  onRefreshApps?: () => Promise<void>;
 }
 
 export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
   onNavigate,
-  onShowToast
+  onShowToast,
+  activeAppId,
+  applications,
+  developer,
+  onRefreshApps
 }) => {
+  const currentApp = applications?.find((a) => a.id === activeAppId) || applications?.[0];
+  const [isTogglingCluster, setIsTogglingCluster] = useState(false);
+  const isClusterActive = currentApp ? currentApp.is_active !== false : true;
+
+  const handleToggleClusterActive = async () => {
+    if (!currentApp) return;
+    setIsTogglingCluster(true);
+    try {
+      const nextState = !isClusterActive;
+      const res = await TATSBackendAPI.toggleAppActive(currentApp.id, nextState);
+      if (res.ok) {
+        if (onRefreshApps) await onRefreshApps();
+        onShowToast(
+          nextState ? 'Cluster Execution Active' : 'Cluster Execution Paused',
+          nextState
+            ? `Application "${currentApp.app_name}" is actively processing calls & actions.`
+            : `Application "${currentApp.app_name}" paused. AI action processing is held to safeguard tokens.`,
+          nextState ? 'success' : 'info'
+        );
+      } else {
+        onShowToast('Action Failed', res.data?.error || 'Could not update cluster state.', 'warning');
+      }
+    } catch (e: any) {
+      onShowToast('Error', e.message || 'Failed to update cluster state.', 'warning');
+    } finally {
+      setIsTogglingCluster(false);
+    }
+  };
   const [filter, setFilter] = useState<'all' | 'voice' | 'failed' | 'webhook'>('all');
   const [telemetry, setTelemetry] = useState<TelemetrySession[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -401,6 +437,78 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
               <span className="text-[#8B716B] text-[10px]">No custom tools registered yet</span>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Plan & Token Control Dashboard Strip */}
+      <div className="bg-gradient-to-r from-white via-[#FAF9F6] to-white p-4 sm:p-5 rounded-3xl border-2 border-[#FFE6DC] shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#FF7E5F] to-[#FFAE33] text-white flex items-center justify-center shadow-md shadow-[#FF7E5F]/20 shrink-0">
+            <span className="material-symbols-outlined text-[26px]">account_balance_wallet</span>
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-['Outfit'] text-base sm:text-lg font-bold text-[#1D1A23]">
+                {currentApp?.plan_tier === 'ENTERPRISE'
+                  ? 'Scale Enterprise Plan'
+                  : currentApp?.plan_tier === 'GROWTH' || currentApp?.plan_tier === 'GROWTH_STARTUP'
+                  ? 'Growth Startup Plan'
+                  : 'Developer Free Plan'}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono bg-emerald-100 text-emerald-800">
+                {currentApp ? currentApp.app_name : 'Primary Cluster'}
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono ${
+                isClusterActive ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+              }`}>
+                {isClusterActive ? 'Execution Live' : 'Execution Paused'}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-[#57423D]">
+              <span>
+                <strong>Remaining:</strong> {(Math.max(0, monthlyQuota - monthlyUnitsUsed)).toLocaleString('en-IN')} units
+              </span>
+              <span className="text-[#8B716B]">&bull;</span>
+              <span>
+                <strong>Burn Pace:</strong> {monthlyUnitsUsed > 0 ? `${Math.round(monthlyUnitsUsed / 28)} units / day` : 'Pristine quota'}
+              </span>
+              {currentApp?.plan_expires_at && (
+                <>
+                  <span className="text-[#8B716B]">&bull;</span>
+                  <span>
+                    <strong>Cycle Renews:</strong> {new Date(currentApp.plan_expires_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Plan & Token Controls */}
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
+          <button
+            onClick={handleToggleClusterActive}
+            disabled={isTogglingCluster}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
+              isClusterActive
+                ? 'bg-[#FFF8EB] hover:bg-[#FEF08A] text-[#854D0E] border-[#FDE047]'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+            }`}
+            title={isClusterActive ? 'Pause AI execution to guarantee 0 token burn' : 'Resume live AI voice/action processing'}
+          >
+            <span className="material-symbols-outlined text-[16px]">
+              {isClusterActive ? 'pause_circle' : 'play_circle'}
+            </span>
+            <span>{isClusterActive ? 'Emergency Token Freeze' : 'Resume Cluster'}</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate('subscription-pricing')}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#FF7E5F] to-[#A53B22] text-white font-['Outfit'] font-bold text-xs shadow-md shadow-[#FF7E5F]/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-[16px]">tune</span>
+            <span>Manage Plan & Tokens</span>
+          </button>
         </div>
       </div>
 

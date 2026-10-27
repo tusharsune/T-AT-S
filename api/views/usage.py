@@ -158,24 +158,55 @@ class ApplicationUpgradeView(APIView):
         responses={200: dict}
     )
     def post(self, request, app_id):
-        # Fix #4: Admin-only — plan changes must follow verified payment, not be done directly.
-        if not request.developer.is_admin:
-            return Response({'error': 'Unauthorized. Admin privileges required. Use the billing payment flow to upgrade your plan.'}, status=status.HTTP_403_FORBIDDEN)
-
         try:
             app = Application.objects.get(id=app_id)
         except Application.DoesNotExist:
             return Response({'error': 'Application not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        target_plan = request.data.get('plan', 'GROWTH').upper()
+        # Ensure user owns this application or is admin
+        if app.developer != request.developer and not request.developer.is_admin:
+            return Response({'error': 'Unauthorized. You do not own this application cluster.'}, status=status.HTTP_403_FORBIDDEN)
+
+        target_plan = request.data.get('plan', 'FREE').upper()
         if target_plan in ['GROWTH_STARTUP']:
             target_plan = 'GROWTH'
         elif target_plan in ['SCALE_ENTERPRISE']:
             target_plan = 'ENTERPRISE'
+        elif target_plan in ['DEVELOPER_FREE', 'CANCEL']:
+            target_plan = 'FREE'
 
         valid_plans = ['FREE', 'GROWTH', 'ENTERPRISE']
         if target_plan not in valid_plans:
             return Response({'error': f"Invalid plan. Choose from {valid_plans}."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Allow app owner to cancel active subscription or downgrade to Developer Free
+        if target_plan == 'FREE':
+            cancellation_reason = request.data.get('reason', 'Developer requested plan cancellation.')
+            app.plan_tier = 'FREE'
+            app.plan_expires_at = None
+            app.save()
+
+            Notification.objects.create(
+                developer=request.developer,
+                title='Subscription Cancelled',
+                message=f"Application '{app.app_name}' has been reverted to Developer Free tier. Unspent booster units remain active. Reason: {cancellation_reason}",
+                notification_type='BILLING',
+                link='/subscription'
+            )
+
+            current_month = timezone.now().strftime('%Y-%m')
+            meter, _ = UsageMeter.objects.get_or_create(application=app, month_year=current_month)
+            platform_config = PlatformConfig.get_active()
+
+            return Response({
+                'message': f"Subscription for '{app.app_name}' cancelled successfully. Reverted to Developer Free tier.",
+                'plan_tier': 'FREE',
+                'quota': meter.get_quota_status(platform_config)
+            }, status=status.HTTP_200_OK)
+
+        # For upgrading to a paid plan directly without payment: Admin only
+        if not request.developer.is_admin:
+            return Response({'error': 'Unauthorized. Admin privileges required. Use the billing payment flow to upgrade your plan.'}, status=status.HTTP_403_FORBIDDEN)
 
         if app.plan_tier == target_plan:
             return Response({

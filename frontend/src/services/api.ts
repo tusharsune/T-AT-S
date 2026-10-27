@@ -360,13 +360,39 @@ export class TATSBackendAPI {
     return { ok: res.ok, status: res.status, data: await res.json() };
   }
 
-  public static async upgradeAppPlan(appId: string, plan: string) {
+  public static async upgradeAppPlan(appId: string, plan: string, reason?: string) {
     const res = await fetch(`${API_BASE}/apps/${appId}/upgrade/`, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify({ plan }),
+      body: JSON.stringify({ plan, reason }),
     });
     return { ok: res.ok, status: res.status, data: await res.json() };
+  }
+
+  public static async cancelSubscription(appId: string, reason: string = 'Developer requested cancellation') {
+    return this.upgradeAppPlan(appId, 'FREE', reason);
+  }
+
+  public static async toggleAppActive(appId: string, isActive: boolean) {
+    const res = await fetch(`${API_BASE}/apps/${appId}/`, {
+      method: 'PATCH',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ is_active: isActive }),
+    });
+    return { ok: res.ok, status: res.status, data: await res.json() };
+  }
+
+  public static async getBillingHistory() {
+    try {
+      const res = await fetch(`${API_BASE}/payments/history/`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+      if (!res.ok) return { orders: [], count: 0 };
+      return await res.json();
+    } catch {
+      return { orders: [], count: 0 };
+    }
   }
 
   // ==========================================
