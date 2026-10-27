@@ -175,7 +175,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
         {/* Footer shortcuts */}
         <div className="px-4 py-2.5 bg-[#FAF9F6] border-t border-[#FFE6DC] flex items-center justify-between text-[11px] text-[#8B716B]">
-          <span>Use 1-6 keys to switch workspaces directly</span>
+          <span>Use number keys (1-8) to switch workspaces directly</span>
           <span>Press Esc to close</span>
         </div>
       </div>

@@ -217,31 +217,52 @@ export default function App() {
     }
   };
 
-  // Keyboard navigation shortcuts
+  // Keyboard navigation shortcuts (1-8 matching active workspace sidebar tabs)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
         return;
       }
 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         if (developer) setIsCommandOpen((prev) => !prev);
-      } else if (e.key === '1') {
-        handleNavigate(developer ? 'developer-dashboard' : 'landing');
-      } else if (e.key === '2') {
-        handleNavigate('visual-tool-builder');
-      } else if (e.key === '3') {
-        handleNavigate('live-voice-playground');
-      } else if (e.key === '4') {
-        handleNavigate('component-wizard');
-      } else if (e.key === '5') {
-        handleNavigate(developer?.is_admin ? 'super-admin' : 'subscription-pricing');
-      } else if (e.key === '6') {
-        handleNavigate(developer?.is_admin ? 'subscription-pricing' : 'settings');
-      } else if (e.key === '7' && developer?.is_admin) {
-        handleNavigate('settings');
+        return;
+      }
+
+      const isAdmin = Boolean(developer?.is_admin);
+
+      // Dynamically matches the active sidebar workspace list
+      const navKeyMap: Record<string, AppView> = isAdmin
+        ? {
+            '1': developer ? 'developer-dashboard' : 'landing',
+            '2': 'visual-tool-builder',
+            '3': 'live-voice-playground',
+            '4': 'component-wizard',
+            '5': 'super-admin',
+            '6': 'subscription-pricing',
+            '7': 'notifications',
+            '8': 'settings',
+          }
+        : {
+            '1': developer ? 'developer-dashboard' : 'landing',
+            '2': 'visual-tool-builder',
+            '3': 'live-voice-playground',
+            '4': 'component-wizard',
+            '5': 'subscription-pricing',
+            '6': 'notifications',
+            '7': 'settings',
+          };
+
+      const targetView = navKeyMap[e.key];
+      if (targetView) {
+        e.preventDefault();
+        handleNavigate(targetView);
       }
     };
 
