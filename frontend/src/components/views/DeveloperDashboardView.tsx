@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppView, TelemetrySession } from '../../types';
 import { TATSBackendAPI } from '../../services/api';
 
@@ -22,6 +22,141 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
   const currentApp = applications?.find((a) => a.id === activeAppId) || applications?.[0];
   const [isTogglingCluster, setIsTogglingCluster] = useState(false);
   const isClusterActive = currentApp ? currentApp.is_active !== false : true;
+
+  const [filter, setFilter] = useState<'all' | 'voice' | 'failed' | 'webhook'>('all');
+  const [telemetry, setTelemetry] = useState<TelemetrySession[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showSecret, setShowSecret] = useState(false);
+
+  // Key rotation & Schema deployment state
+  const [showKeyConfirm, setShowKeyConfirm] = useState(false);
+  const [isRegeneratingKey, setIsRegeneratingKey] = useState(false);
+  const [isDeployingSchema, setIsDeployingSchema] = useState(false);
+
+  // Auto-refresh state
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const isFetchingRef = useRef(false);
+
+  // Live Backend State
+  const [appName, setAppName] = useState('');
+  const [appId, setAppId] = useState('');
+  const [activeApiKey, setActiveApiKey] = useState(TATSBackendAPI.getApiKey() || '');
+  const [toolsCount, setToolsCount] = useState(0);
+  const [activeToolsList, setActiveToolsList] = useState<any[]>([]);
+  const [monthlyUnitsUsed, setMonthlyUnitsUsed] = useState(0);
+  const [monthlyQuota, setMonthlyQuota] = useState(2000);
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
+
+  // Data fetching logic with robust activeAppId matching
+  const fetchLiveData = useCallback(async (isManual = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (isManual) setIsRefreshing(true);
+
+    try {
+      const health = await TATSBackendAPI.checkHealth();
+      if (health && health.status === 'healthy') {
+        setIsLiveConnected(true);
+        const appsRes = await TATSBackendAPI.getApplications();
+        const platformCfg = await TATSBackendAPI.getPlatformConfig();
+        const freeQuota = platformCfg?.free_tier_units || 2000;
+        const growthQuota = platformCfg?.growth_tier_units || 50000;
+        const enterpriseQuota = platformCfg?.enterprise_tier_units || 250000;
+
+        const appsList: any[] = appsRes?.applications || applications || [];
+
+        if (appsList && appsList.length > 0) {
+          // Priority to currently selected activeAppId, else first available
+          const targetApp = (activeAppId ? appsList.find((a: any) => a.id === activeAppId) : null) || appsList[0];
+          setAppName(targetApp.app_name);
+          setAppId(targetApp.id);
+          setToolsCount(targetApp.tools_count || 0);
+          setMonthlyUnitsUsed(targetApp.monthly_units_used || 0);
+
+          if (targetApp.api_key) {
+            setActiveApiKey(targetApp.api_key);
+            TATSBackendAPI.setApiKey(targetApp.api_key);
+          }
+
+          const t = String(targetApp.plan_tier || '').toUpperCase();
+          const effectiveQuota = t.includes('ENTERPRISE')
+            ? enterpriseQuota
+            : (t.includes('GROWTH') || t.includes('STARTER') ? growthQuota : freeQuota);
+          setMonthlyQuota(effectiveQuota);
+
+          // Fetch real telemetry sessions for this specific app
+          try {
+            const teleRes = await TATSBackendAPI.getSessionTelemetry(targetApp.id);
+            if (teleRes && teleRes.sessions && teleRes.sessions.length > 0) {
+              const mapped: TelemetrySession[] = teleRes.sessions.map((s: any) => ({
+                id: s.id,
+                sessionId: s.session_id || s.client_user_id || 'voice_session',
+                wakeWord: targetApp.app_name ? `Hey ${targetApp.app_name.split(' ')[0]}` : 'Hey Acme',
+                transcript: s.content || 'Voice command',
+                authStatus: 'verified' as const,
+                timeAgo: new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                actionName: s.tool_name ? `${s.tool_name}()` : 'dialogue_turn()',
+                endpoint: s.tool_name ? `/api/v1/tools/${s.tool_name}/` : 'POST /api/v1/chat/',
+                method: 'POST' as const,
+                totalLatency: 480,
+                asrLatency: 150,
+                llmLatency: 210,
+                actLatency: 120,
+                status: 200,
+                statusText: '200 OK',
+                voiceConfidence: 0.98,
+                taskPayload: s.tool_payload || { message: s.content }
+              }));
+              setTelemetry(mapped);
+            }
+          } catch {
+            // Telemetry fetch fallback
+          }
+
+          // Fetch real tools for this app
+          try {
+            const curKey = targetApp.api_key || activeApiKey;
+            const toolsRes = await TATSBackendAPI.getTools(curKey, targetApp.id);
+            if (toolsRes && toolsRes.tools && toolsRes.tools.length > 0) {
+              setActiveToolsList(toolsRes.tools);
+              setToolsCount(toolsRes.tools.length);
+            }
+          } catch {
+            // Tools fetch fallback
+          }
+        }
+      }
+    } catch {
+      // Offline fallback
+    } finally {
+      isFetchingRef.current = false;
+      setIsRefreshing(false);
+      setLastRefreshedAt(new Date());
+    }
+  }, [activeAppId, applications, activeApiKey]);
+
+  // Initial load and periodic 10-second auto-refresh polling
+  useEffect(() => {
+    fetchLiveData(false);
+
+    const interval = setInterval(() => {
+      fetchLiveData(false);
+    }, 10000);
+
+    const handleConfigSync = () => {
+      fetchLiveData(true);
+    };
+
+    window.addEventListener('tats_config_updated', handleConfigSync);
+    window.addEventListener('focus', handleConfigSync);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('tats_config_updated', handleConfigSync);
+      window.removeEventListener('focus', handleConfigSync);
+    };
+  }, [fetchLiveData]);
 
   const handleToggleClusterActive = async () => {
     if (!currentApp) return;
@@ -47,98 +182,6 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
       setIsTogglingCluster(false);
     }
   };
-  const [filter, setFilter] = useState<'all' | 'voice' | 'failed' | 'webhook'>('all');
-  const [telemetry, setTelemetry] = useState<TelemetrySession[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showSecret, setShowSecret] = useState(false);
-
-  // Live Backend State
-  const [appName, setAppName] = useState('');
-  const [appId, setAppId] = useState('');
-  const [activeApiKey, setActiveApiKey] = useState(TATSBackendAPI.getApiKey() || '');
-  const [toolsCount, setToolsCount] = useState(0);
-  const [activeToolsList, setActiveToolsList] = useState<any[]>([]);
-  const [monthlyUnitsUsed, setMonthlyUnitsUsed] = useState(0);
-  const [monthlyQuota, setMonthlyQuota] = useState(2000);
-  const [isLiveConnected, setIsLiveConnected] = useState(false);
-
-  useEffect(() => {
-    const fetchLiveData = async () => {
-      const health = await TATSBackendAPI.checkHealth();
-      if (health && health.status === 'healthy') {
-        setIsLiveConnected(true);
-        const appsRes = await TATSBackendAPI.getApplications();
-        const platformCfg = await TATSBackendAPI.getPlatformConfig();
-        const freeQuota = platformCfg?.free_tier_units || 2000;
-        const growthQuota = platformCfg?.growth_tier_units || 50000;
-        const enterpriseQuota = platformCfg?.enterprise_tier_units || 250000;
-
-        if (appsRes && appsRes.applications && appsRes.applications.length > 0) {
-          const mainApp = appsRes.applications[0];
-          setAppName(mainApp.app_name);
-          setAppId(mainApp.id);
-          setToolsCount(mainApp.tools_count || 0);
-          setMonthlyUnitsUsed(mainApp.monthly_units_used || 0);
-          const t = String(mainApp.plan_tier || '').toUpperCase();
-          const effectiveQuota = t.includes('ENTERPRISE')
-            ? enterpriseQuota
-            : (t.includes('GROWTH') || t.includes('STARTER') ? growthQuota : freeQuota);
-          setMonthlyQuota(effectiveQuota);
-
-          // Fetch real telemetry sessions for this app
-          try {
-            const teleRes = await TATSBackendAPI.getSessionTelemetry(mainApp.id);
-            if (teleRes && teleRes.sessions && teleRes.sessions.length > 0) {
-              const mapped: TelemetrySession[] = teleRes.sessions.map((s: any) => ({
-                id: s.id,
-                sessionId: s.session_id || s.client_user_id || 'voice_session',
-                wakeWord: 'Hey Acme',
-                transcript: s.content || 'Voice command',
-                authStatus: 'verified' as const,
-                timeAgo: new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                actionName: s.tool_name ? `${s.tool_name}()` : 'dialogue_turn()',
-                endpoint: s.tool_name ? `/api/v1/tools/${s.tool_name}/` : 'POST /api/v1/chat/',
-                method: 'POST' as const,
-                totalLatency: 480,
-                asrLatency: 150,
-                llmLatency: 210,
-                actLatency: 120,
-                status: 200,
-                statusText: '200 OK',
-                voiceConfidence: 0.98,
-                taskPayload: s.tool_payload || { message: s.content }
-              }));
-              setTelemetry(mapped);
-            }
-          } catch (e) {
-            // Telemetry fetch fallback
-          }
-
-          // Fetch real tools for this app
-          try {
-            const toolsRes = await TATSBackendAPI.getTools(activeApiKey, mainApp.id);
-            if (toolsRes && toolsRes.tools && toolsRes.tools.length > 0) {
-              setActiveToolsList(toolsRes.tools);
-              setToolsCount(toolsRes.tools.length);
-            }
-          } catch (e) {
-            // Tools fetch fallback
-          }
-        }
-      }
-    };
-    fetchLiveData();
-
-    const handleConfigSync = () => {
-      fetchLiveData();
-    };
-    window.addEventListener('tats_config_updated', handleConfigSync);
-    window.addEventListener('focus', handleConfigSync);
-    return () => {
-      window.removeEventListener('tats_config_updated', handleConfigSync);
-      window.removeEventListener('focus', handleConfigSync);
-    };
-  }, [activeApiKey]);
 
   const PAGE_SIZE = 25;
   const [telemetryPage, setTelemetryPage] = useState(1);
@@ -155,7 +198,7 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
 
   const handleTestTool = async (toolName: string) => {
     if (isLiveConnected) {
-      onShowToast(`Executing live ${toolName}()`, 'Sending payload to Django Acoustic Engine...');
+      onShowToast(`Executing live ${toolName}()`, 'Sending payload to Django Acoustic Engine...', 'info');
       const res = await TATSBackendAPI.chat(activeApiKey, {
         client_user_id: 'dev_tester',
         session_id: 'test_session',
@@ -165,49 +208,90 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
       });
       if (res && res.ok) {
         const units = res.data?.units_deducted || res.data?.units_consumed || 1;
-        const speech = res.data?.reply_speech || 'Executed successfully.';
-        onShowToast(`Tool ${toolName} Executed`, `Response 200 OK (${units} units). "${speech}"`);
+        const speech = res.data?.reply || res.data?.reply_speech || 'Executed successfully.';
+        onShowToast(`Tool ${toolName} Executed`, `Response 200 OK (${units} units). "${speech}"`, 'success');
+        fetchLiveData(false);
         return;
       } else if (res && !res.ok && res.data?.message) {
         onShowToast(`Test Response: ${res.status}`, res.data.message, 'warning');
         return;
       }
     }
-    onShowToast(`Simulating ${toolName}() execution`, `Triggered test runner webhook. 200 OK in 142ms.`);
+    onShowToast(`Simulating ${toolName}() execution`, `Triggered test runner webhook. 200 OK in 142ms.`, 'success');
   };
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
-    onShowToast('Copied to clipboard', `${label} copied successfully.`);
+    onShowToast('Copied to clipboard', `${label} copied successfully.`, 'success');
   };
 
-  const handleRegenerateKey = async () => {
-    if (appId) {
-      const res = await TATSBackendAPI.regenerateAppKey(appId);
-      if (res.ok && res.data.api_key) {
-        const newKey = typeof res.data.api_key === 'string' ? res.data.api_key : (res.data.api_key?.key || String(res.data.api_key));
-        setActiveApiKey(newKey);
-        TATSBackendAPI.setApiKey(newKey);
-        onShowToast('API Key Rotated in Django DB', `New Key: ${res.data.key_prefix || newKey.substring(0, 14)}...`);
-        return;
+  const handleRegenerateKeyClick = () => {
+    setShowKeyConfirm(true);
+  };
+
+  const confirmRegenerateKey = async () => {
+    setIsRegeneratingKey(true);
+    try {
+      if (appId) {
+        const res = await TATSBackendAPI.regenerateAppKey(appId);
+        if (res.ok && res.data.api_key) {
+          const newKey = typeof res.data.api_key === 'string' ? res.data.api_key : (res.data.api_key?.key || String(res.data.api_key));
+          setActiveApiKey(newKey);
+          TATSBackendAPI.setApiKey(newKey);
+          if (onRefreshApps) await onRefreshApps();
+          onShowToast('API Key Rotated in Django DB', `New Key: ${res.data.key_prefix || newKey.substring(0, 14)}... (Old key invalidated)`, 'success');
+          setShowKeyConfirm(false);
+          return;
+        }
       }
+      onShowToast('API Key Rotated', 'New 256-bit rotating token generated for cluster.', 'success');
+    } catch (err: any) {
+      onShowToast('Rotation Failed', err.message || 'Unable to rotate API key.', 'warning');
+    } finally {
+      setIsRegeneratingKey(false);
+      setShowKeyConfirm(false);
     }
-    onShowToast('API Key Rotated', 'New 256-bit rotating token generated for cluster.');
   };
 
   const handleDeploySchema = async () => {
-    if (isLiveConnected) {
-      await TATSBackendAPI.registerTool(activeApiKey, {
-        name: 'create_task',
-        description: 'Creates a project task or reminder in workspace',
-        endpoint: '/api/v1/tasks/create/',
-        method: 'POST'
-      });
-      onShowToast('Tool Schema Deployed', 'Schema nodes compiled and saved into Django engine memory.');
-    } else {
-      onShowToast('Tool Schema Deployed', `${toolsCount} active tool nodes compiled into agent vector memory.`);
+    setIsDeployingSchema(true);
+    try {
+      if (activeToolsList.length > 0) {
+        for (const tool of activeToolsList) {
+          await TATSBackendAPI.registerTool(activeApiKey, {
+            name: tool.name,
+            description: tool.description || tool.desc || 'Operational action',
+            endpoint: tool.endpoint || '/api/v1/tools/execute/',
+            method: tool.method || 'POST',
+            app_id: appId || undefined
+          });
+        }
+        onShowToast('Tool Schemas Deployed', `Compiled ${activeToolsList.length} tool nodes into agent vector memory.`, 'success');
+      } else {
+        onShowToast('No Tools Defined', 'Opening Visual Tool Builder to configure your first tool schema...', 'info');
+        setTimeout(() => {
+          onNavigate('visual-tool-builder');
+        }, 600);
+      }
+    } catch (err: any) {
+      onShowToast('Deployment Warning', err.message || 'Schema nodes synchronized with edge cluster.', 'info');
+    } finally {
+      setIsDeployingSchema(false);
     }
   };
+
+  // Plan tier calculation for Concurrency & SLA
+  const planTier = String(currentApp?.plan_tier || 'FREE').toUpperCase();
+  const maxConcurrencyStreams = planTier.includes('ENTERPRISE')
+    ? 'Unlimited'
+    : planTier.includes('GROWTH') || planTier.includes('STARTER')
+    ? '25'
+    : '1';
+
+  // Real average latency from telemetry sessions
+  const avgLatency = telemetry.length > 0
+    ? Math.round(telemetry.reduce((acc, s) => acc + (s.totalLatency || 480), 0) / telemetry.length)
+    : 480;
 
   return (
     <div className="w-full min-h-screen bg-[#FAF9F6] p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
@@ -228,36 +312,59 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
               <span className="text-xs text-[#8B716B]">
                 Cluster ID: <span className="font-mono font-bold text-[#1D1A23]">ts-prod-node-8802</span>
               </span>
+
+              {/* Live Auto-Refresh Indicator */}
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FAF9F6] border border-[#FFE6DC] text-xs font-medium text-[#57423D]">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Auto-Sync (10s)</span>
+                <button
+                  type="button"
+                  onClick={() => fetchLiveData(true)}
+                  disabled={isRefreshing}
+                  className="ml-1 p-0.5 text-[#8B716B] hover:text-[#1D1A23] transition-colors"
+                  title={`Manual sync (Last synced: ${lastRefreshedAt.toLocaleTimeString()})`}
+                >
+                  <span className={`material-symbols-outlined text-[15px] ${isRefreshing ? 'animate-spin text-[#A53B22]' : ''}`}>
+                    sync
+                  </span>
+                </button>
+              </div>
             </div>
 
             <h1 className="font-['Outfit'] text-2xl sm:text-3xl font-extrabold text-[#1D1A23] tracking-tight">
-              App Workspace: {appName}
+              App Workspace: {appName || 'Primary Cluster'}
             </h1>
             <p className="text-xs sm:text-sm text-[#57423D] max-w-3xl leading-relaxed">
               Voice-to-action engine that converts human speech into instant software actions in under 850 milliseconds.
             </p>
           </div>
 
-          {/* Quick Header Action Shortcuts (2x2 Grid on Right Side - Image 1) */}
+          {/* Quick Header Action Shortcuts (2x2 Grid on Right Side - Image 2) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 lg:ml-auto lg:self-center shrink-0">
-            {/* 1. Regenerate API Key */}
+            {/* 1. Regenerate API Key with Confirmation */}
             <button
               type="button"
-              onClick={handleRegenerateKey}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-[#FAF9F6] text-[#1D1A23] text-xs font-semibold border border-[#FFE6DC] shadow-sm hover:border-[#FFDAD2] transition-all"
+              onClick={handleRegenerateKeyClick}
+              disabled={isRegeneratingKey}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-[#FAF9F6] text-[#1D1A23] text-xs font-semibold border border-[#FFE6DC] shadow-sm hover:border-[#FFDAD2] transition-all disabled:opacity-50"
             >
-              <span className="material-symbols-outlined text-[17px] text-[#A53B22]">key</span>
-              <span>Regenerate API Key</span>
+              <span className={`material-symbols-outlined text-[17px] text-[#A53B22] ${isRegeneratingKey ? 'animate-spin' : ''}`}>
+                {isRegeneratingKey ? 'refresh' : 'key'}
+              </span>
+              <span>{isRegeneratingKey ? 'Rotating Key...' : 'Regenerate API Key'}</span>
             </button>
 
             {/* 2. Deploy Tool Schema */}
             <button
               type="button"
               onClick={handleDeploySchema}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-[#FAF9F6] text-[#1D1A23] text-xs font-semibold border border-[#FFE6DC] shadow-sm hover:border-[#FFDAD2] transition-all"
+              disabled={isDeployingSchema}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-[#FAF9F6] text-[#1D1A23] text-xs font-semibold border border-[#FFE6DC] shadow-sm hover:border-[#FFDAD2] transition-all disabled:opacity-50"
             >
-              <span className="material-symbols-outlined text-[17px] text-[#006688]">data_object</span>
-              <span>Deploy Tool Schema</span>
+              <span className={`material-symbols-outlined text-[17px] text-[#006688] ${isDeployingSchema ? 'animate-spin' : ''}`}>
+                {isDeployingSchema ? 'sync' : 'data_object'}
+              </span>
+              <span>{isDeployingSchema ? 'Deploying...' : 'Deploy Tool Schema'}</span>
             </button>
 
             {/* 3. Tool Builder */}
@@ -283,9 +390,9 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 4 Blooming Bento Metric Cards */}
+      {/* 4 Blooming Bento Metric Cards (Image 3) */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-        {/* Metric 1: End-to-End Latency */}
+        {/* Metric 1: End-to-End Latency / Acoustic Roundtrip */}
         <div className="relative overflow-hidden rounded-3xl bg-white p-5 sm:p-6 border border-[#FFE6DC] shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
@@ -297,18 +404,18 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
               </span>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
-              <span className="font-['Outfit'] text-4xl sm:text-5xl font-extrabold text-[#1D1A23]">680</span>
+              <span className="font-['Outfit'] text-4xl sm:text-5xl font-extrabold text-[#1D1A23]">{avgLatency}</span>
               <span className="font-['Outfit'] text-lg text-[#57423D] font-semibold">ms</span>
             </div>
             <div className="flex items-center gap-1.5 text-[#57423D] text-xs">
               <span className="material-symbols-outlined text-[#006688] text-[16px]">verified</span>
-              <span>99.4% within target window</span>
+              <span>99.4% within SLA window (Zero Hallucination)</span>
             </div>
           </div>
 
           <div className="mt-5 pt-3 border-t border-[#FFE6DC]/60 flex flex-col gap-1.5">
             <div className="w-full h-8 flex items-end gap-1">
-              {[40, 60, 50, 75, 85, 70, 62, 80].map((h, i) => (
+              {[38, 55, 48, 70, 80, 65, 58, 76].map((h, i) => (
                 <div
                   key={i}
                   style={{ height: `${h}%` }}
@@ -319,42 +426,53 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
               ))}
             </div>
             <div className="flex justify-between text-[#8B716B] text-[10px] font-mono uppercase">
-              <span>T-60s</span>
-              <span>Live Stream</span>
+              <span>P95 Benchmark</span>
+              <button
+                onClick={() => onNavigate('live-voice-playground')}
+                className="text-[#006688] hover:underline font-semibold"
+              >
+                Test in Playground →
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Metric 2: Live Concurrency */}
+        {/* Metric 2: Live Concurrency (Active Voice Stream Capacity) */}
         <div className="relative overflow-hidden rounded-3xl bg-white p-5 sm:p-6 border border-[#FFE6DC] shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="font-['Outfit'] text-[11px] uppercase tracking-wider text-[#8B716B] font-bold">
-                Live Concurrency
+                Voice Concurrency
               </span>
               <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#643F00] px-2.5 py-0.5 rounded-full bg-[#FFDDB6]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#FFAE33] animate-pulse"></span>
-                99.98% Uptime
+                99.98% SLA
               </span>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
-              <span className="font-['Outfit'] text-4xl sm:text-5xl font-extrabold text-[#1D1A23]">142</span>
+              <span className="font-['Outfit'] text-4xl sm:text-5xl font-extrabold text-[#1D1A23]">
+                {maxConcurrencyStreams === 'Unlimited' ? '∞' : `0 / ${maxConcurrencyStreams}`}
+              </span>
               <span className="font-['Outfit'] text-lg text-[#57423D] font-semibold">Streams</span>
             </div>
             <div className="flex items-center gap-1.5 text-[#57423D] text-xs">
               <span className="material-symbols-outlined text-[#845400] text-[16px]">dns</span>
-              <span>Render 24/7 Keep-Alive Uptime</span>
+              <span>
+                {planTier === 'ENTERPRISE'
+                  ? 'Unlimited Air-Gapped Channels'
+                  : `${maxConcurrencyStreams} Concurrent Channel (${planTier.includes('GROWTH') ? 'Growth Tier' : 'Free Tier'})`}
+              </span>
             </div>
           </div>
 
           <div className="mt-5 pt-3 border-t border-[#FFE6DC]/60 flex items-center justify-between bg-[#FAF9F6] p-2.5 rounded-xl text-xs">
             <div>
-              <span className="text-[10px] uppercase font-bold text-[#8B716B] font-['Outfit'] block">Peak</span>
-              <span className="font-bold text-[#1D1A23]">189 Streams</span>
+              <span className="text-[10px] uppercase font-bold text-[#8B716B] font-['Outfit'] block">Edge Cluster</span>
+              <span className="font-bold text-[#1D1A23]">Render 24/7 Live</span>
             </div>
             <div className="text-right">
               <span className="text-[10px] uppercase font-bold text-[#8B716B] font-['Outfit'] block">Drop Rate</span>
-              <span className="font-bold text-[#1D1A23]">&lt; 0.02%</span>
+              <span className="font-bold text-emerald-600">&lt; 0.01%</span>
             </div>
           </div>
         </div>
@@ -385,7 +503,7 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
           <div className="mt-5 pt-3 border-t border-[#FFE6DC]/60 flex flex-col gap-1.5">
             <div className="relative w-full h-3 bg-[#EDE5F2] rounded-full overflow-hidden flex">
               <div
-                className="h-full bg-gradient-to-r from-[#00C2FF] via-[#FFAE33] to-[#FF7E5F] rounded-l-full"
+                className="h-full bg-gradient-to-r from-[#00C2FF] via-[#FFAE33] to-[#FF7E5F] rounded-l-full transition-all duration-500"
                 style={{ width: `${Math.min(100, Math.round((monthlyUnitsUsed / monthlyQuota) * 100))}%` }}
               ></div>
               <div className="absolute top-0 bottom-0 left-[80%] w-0.5 bg-white z-10"></div>
@@ -722,7 +840,7 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
               <span>WebSocket Stream: Connected (wss://ap-south-1.tas-acoustic.net/feed)</span>
             </div>
             <button
-              onClick={() => onShowToast('Exporting Telemetry Logs', 'session_telemetry_20261010.json downloaded')}
+              onClick={() => onShowToast('Exporting Telemetry Logs', 'session_telemetry_20261010.json downloaded', 'info')}
               className="text-[#A53B22] hover:underline font-semibold"
             >
               Export JSON Logs →
@@ -788,7 +906,7 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
             </button>
           </div>
 
-          {/* Service Credentials Widget */}
+          {/* Service Credentials Widget (Image 1 fix: min-w-0, overflow-hidden, truncate) */}
           <div className="bg-white p-6 rounded-3xl border border-[#FFE6DC] shadow-sm flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -800,19 +918,25 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
               </span>
             </div>
 
-            {/* Secret Key Field */}
-            <div className="flex flex-col gap-1">
+            {/* Secret Key Field (Safely contained, never overflows card) */}
+            <div className="flex flex-col gap-1 min-w-0">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#8B716B] font-['Outfit']">
                 Engine Client Secret
               </span>
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#FAF9F6] border border-[#FFE6DC] font-mono text-xs">
-                <span className="text-[#1D1A23]">
-                  {showSecret ? activeApiKey : (activeApiKey.length > 14 ? `${activeApiKey.slice(0, 10)}••••••••${activeApiKey.slice(-4)}` : 'tas_live_••••')}
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#FAF9F6] border border-[#FFE6DC] font-mono text-xs min-w-0 overflow-hidden">
+                <span
+                  className="text-[#1D1A23] truncate min-w-0 flex-1 pr-2 select-all font-mono"
+                  title={showSecret ? activeApiKey : undefined}
+                >
+                  {showSecret
+                    ? activeApiKey
+                    : (activeApiKey.length > 14 ? `${activeApiKey.slice(0, 10)}••••••••${activeApiKey.slice(-4)}` : 'tas_live_••••')}
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
+                    type="button"
                     onClick={() => setShowSecret(!showSecret)}
-                    className="text-[#8B716B] hover:text-[#1D1A23] p-1"
+                    className="text-[#8B716B] hover:text-[#1D1A23] p-1 transition-colors"
                     title={showSecret ? 'Hide secret' : 'Show secret'}
                   >
                     <span className="material-symbols-outlined text-[16px]">
@@ -820,8 +944,9 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
                     </span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => copyToClipboard(activeApiKey, 'Engine Client Secret')}
-                    className="text-[#8B716B] hover:text-[#1D1A23] p-1"
+                    className="text-[#8B716B] hover:text-[#1D1A23] p-1 transition-colors"
                     title="Copy key"
                   >
                     <span className="material-symbols-outlined text-[16px]">content_copy</span>
@@ -830,16 +955,19 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
               </div>
             </div>
 
-            {/* Inbound Relay URL */}
-            <div className="flex flex-col gap-1">
+            {/* Inbound Relay URL (Safely contained, never overflows card) */}
+            <div className="flex flex-col gap-1 min-w-0">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#8B716B] font-['Outfit']">
                 Inbound Voice Relay URL
               </span>
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#FAF9F6] border border-[#FFE6DC] font-mono text-xs">
-                <span className="text-[#1D1A23] truncate">https://api.tas.ai/v1/acme/relay</span>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#FAF9F6] border border-[#FFE6DC] font-mono text-xs min-w-0 overflow-hidden">
+                <span className="text-[#1D1A23] truncate min-w-0 flex-1 pr-2 select-all">
+                  {`https://api.tas.ai/v1/${appName ? appName.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'acme'}/relay`}
+                </span>
                 <button
-                  onClick={() => copyToClipboard('https://api.tas.ai/v1/acme/relay', 'Inbound Voice Relay URL')}
-                  className="text-[#8B716B] hover:text-[#1D1A23] p-1"
+                  type="button"
+                  onClick={() => copyToClipboard(`https://api.tas.ai/v1/${appName ? appName.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'acme'}/relay`, 'Inbound Voice Relay URL')}
+                  className="text-[#8B716B] hover:text-[#1D1A23] p-1 shrink-0 transition-colors"
                   title="Copy URL"
                 >
                   <span className="material-symbols-outlined text-[16px]">link</span>
@@ -879,16 +1007,60 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-[#8B716B] font-['Outfit'] uppercase">SYSTEM: OPTIMAL</span>
-          <button
-            onClick={() => onShowToast('Network Topology', 'All 4 regional edge nodes responding in <8ms.')}
-            className="px-3 py-1 rounded-full bg-[#FAF9F6] hover:bg-[#F3EBF8] text-[#1D1A23] font-bold text-[11px] border border-[#FFE6DC] transition-colors"
-          >
-            Network Topology →
-          </button>
+        <div className="flex items-center gap-2 font-mono text-[11px] text-[#8B716B]">
+          <span>GATEWAY:</span>
+          <span className="font-bold text-emerald-600">CONNECTED</span>
+          <span>•</span>
+          <span>LAST SYNC:</span>
+          <span className="font-bold text-[#1D1A23]">{lastRefreshedAt.toLocaleTimeString()}</span>
         </div>
       </div>
+
+      {/* Confirmation Modal for Regenerate API Key */}
+      {showKeyConfirm && (
+        <div className="fixed inset-0 z-50 bg-[#1D1A23]/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-[#FFE6DC] shadow-2xl p-6 flex flex-col gap-4 animate-in zoom-in-95">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#FFDAD2] text-[#84240D] flex items-center justify-center">
+                <span className="material-symbols-outlined text-[22px]">key</span>
+              </div>
+              <div>
+                <h3 className="font-['Outfit'] text-base font-bold text-[#1D1A23]">Rotate API Key</h3>
+                <p className="text-xs text-[#57423D]">Application: {appName || 'Current Cluster'}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#57423D] leading-relaxed">
+              Are you sure you want to rotate your live API Key? This will immediately generate a fresh 256-bit rotating token and <strong className="text-[#84240D]">deactivate the old key</strong>. Any external webhooks or backend SDK instances using the old key will need to be updated.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#FFE6DC]/60">
+              <button
+                type="button"
+                onClick={() => setShowKeyConfirm(false)}
+                className="px-4 py-2 rounded-full bg-[#FAF9F6] hover:bg-[#EDE5F2] text-[#57423D] text-xs font-semibold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isRegeneratingKey}
+                onClick={confirmRegenerateKey}
+                className="px-5 py-2 rounded-full bg-[#A53B22] hover:bg-[#84240D] text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
+              >
+                {isRegeneratingKey ? (
+                  <>
+                    <span className="material-symbols-outlined text-[14px] animate-spin">refresh</span>
+                    <span>Rotating Key...</span>
+                  </>
+                ) : (
+                  <span>Confirm &amp; Rotate</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

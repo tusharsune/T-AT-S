@@ -202,9 +202,13 @@ export default function App() {
     }
   };
 
-  const handleAppCreated = (app: any) => {
+  const handleAppCreated = (app: any, targetView: AppView = 'developer-dashboard') => {
     setApplications((prev) => [app, ...prev]);
     setActiveAppId(app.id);
+    localStorage.setItem('tats_active_app_id', app.id);
+    loadApplications();
+    addToast('Cluster Ready', `Provisioned "${app.app_name}". Switched to active workspace.`, 'success');
+    setCurrentView(targetView);
   };
 
   const handleSelectApp = (appOrId: any) => {
