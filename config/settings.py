@@ -225,8 +225,8 @@ CORS_ALLOW_HEADERS = [
 # T@S Core Agent Settings
 T_AT_S = {
     'GROQ_API_KEY': os.getenv('GROQ_API_KEY', ''),
-    'DEFAULT_MODEL': os.getenv('DEFAULT_MODEL', 'llama-3.3-70b-versatile'),
-    'FALLBACK_MODEL': os.getenv('FALLBACK_MODEL', 'llama-3.1-8b-instant'),
+    'DEFAULT_MODEL': os.getenv('DEFAULT_MODEL', 'qwen/qwen3.8-27b'),
+    'FALLBACK_MODEL': os.getenv('FALLBACK_MODEL', 'openai/gpt-oss-120b'),
     'OLLAMA_BASE_URL': os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434'),
     'DISPATCH_TIMEOUT_SECONDS': 4.0,
     'SILENT_RETRY_TIMEOUT_SECONDS': 1.5,
