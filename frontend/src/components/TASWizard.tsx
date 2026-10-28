@@ -674,7 +674,7 @@ export const TASWizard: React.FC<TASWizardProps> = ({ isOpen, onClose, onSuccess
                         <div className="w-1 bg-[#FF7E5F] h-3 rounded-full animate-pulse"></div>
                         <div className="w-1 bg-[#FFAE33] h-4 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
                         <div className="w-1 bg-[#FF7E5F] h-2 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
-                        <div className="w-1 bg-[#00C2FF] h-3.5 rounded-full animate-pulse" style={{ animationDelay: '450ms' }}></div>
+                        <div className="w-1 bg-[#FFAE33] h-3.5 rounded-full animate-pulse" style={{ animationDelay: '450ms' }}></div>
                       </div>
                       <span className="text-xs font-bold text-[#A53B22]">Active</span>
                     </div>

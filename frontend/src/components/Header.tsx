@@ -240,9 +240,7 @@ const response = await agent.executeVoice(audioStream);`
                 <span className="material-symbols-outlined text-[16px] text-[#A53B22]">search</span>
                 <span>Search tools, routes, or commands...</span>
               </div>
-              <kbd className="hidden lg:inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-white/80 border border-[#DEC0B9]/60 text-[10px] font-mono text-[#57423D]">
-                ⌘K
-              </kbd>
+
             </button>
           </div>
         ) : (

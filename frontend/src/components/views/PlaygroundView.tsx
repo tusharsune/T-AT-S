@@ -601,7 +601,7 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
               </span>
               {activeApp && (
                 <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00C2FF]"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                   <span className="text-xs text-[#006688] font-bold font-['Outfit']">
                     App: {activeApp.name}
                   </span>
@@ -661,7 +661,7 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
                 micState === 'listening'
                   ? 'bg-[#FF5F45] shadow-[0_0_8px_rgba(255,95,69,0.8)] animate-pulse'
                   : micState === 'synthesizing'
-                  ? 'bg-[#00C2FF] shadow-[0_0_8px_rgba(0,194,255,0.8)] animate-pulse'
+                  ? 'bg-[#FFAE33] shadow-[0_0_8px_rgba(255,174,51,0.6)]'
                   : 'bg-[#FFAE33]'
               }`}></span>
               <span className="font-bold text-[#1D1A23]">
@@ -725,8 +725,8 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
               style={{ animationDuration: '3.5s' }}
             ></div>
             <div
-              className={`w-80 h-80 rounded-full bg-[#00C2FF]/10 opacity-25 transition-all duration-700 ${
-                micState === 'listening' ? 'scale-110 animate-ping' : 'scale-90 opacity-10'
+              className={`w-80 h-80 rounded-full bg-[#FFAE33]/15 opacity-25 transition-all duration-700 ${
+                micState === 'listening' ? 'scale-110' : 'scale-90 opacity-10'
               }`}
               style={{ animationDuration: '4.8s', animationDelay: '0.6s' }}
             ></div>
@@ -745,9 +745,9 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
               <div
                 className={`absolute w-44 h-44 rounded-full blur-xl transition-all duration-500 ${
                   micState === 'listening'
-                    ? 'scale-125 bg-gradient-to-tr from-[#FF7E5F]/50 via-[#FFAE33]/40 to-[#00C2FF]/40 animate-pulse'
+                    ? 'scale-125 bg-gradient-to-tr from-[#FF7E5F]/50 via-[#FFAE33]/40 to-[#FFAE33]/40 animate-pulse'
                     : micState === 'synthesizing'
-                    ? 'scale-120 bg-gradient-to-tr from-[#006688]/40 via-[#00C2FF]/40 to-[#75D1FF]/40 animate-pulse'
+                    ? 'scale-120 bg-gradient-to-tr from-[#FF7E5F]/40 via-[#FFAE33]/40 to-[#DEC0B9]/40 animate-pulse'
                     : 'scale-95 bg-gradient-to-tr from-[#FF7E5F]/20 via-[#DEC0B9]/20 to-[#FFAE33]/20 group-hover:scale-105'
                 }`}
               ></div>
@@ -784,7 +784,7 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
                 micState === 'listening'
                   ? 'bg-[#FF5F45] animate-ping'
                   : micState === 'synthesizing'
-                  ? 'bg-[#00C2FF] animate-pulse'
+                  ? 'bg-[#FFAE33]'
                   : 'bg-[#8B716B]'
               }`}></span>
               <span className="font-['Outfit'] font-bold text-xs tracking-wide">

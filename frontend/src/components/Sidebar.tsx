@@ -111,29 +111,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {renderNavButtons(false)}
         </div>
 
-        {/* Acoustic Node Bottom Status Box */}
+        {/* Workspace Quick Hub Box */}
         <div className="px-4">
-          <div className="p-3.5 rounded-2xl bg-white/90 border border-[#FFE6DC] shadow-[0_2px_8px_-1px_rgba(255,126,95,0.08)] flex flex-col gap-1.5">
+          <div className="p-3.5 rounded-2xl bg-white/95 border border-[#FFE6DC] shadow-sm flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-[#A53B22]">
-                <span className="material-symbols-outlined text-[16px] animate-pulse">graphic_eq</span>
+              <div className="flex items-center gap-1.5 text-[#1D1A23]">
+                <span className="material-symbols-outlined text-[16px] text-[#A53B22]">terminal</span>
                 <span className="font-['Outfit'] text-[11px] font-bold uppercase tracking-wider">
-                  Acoustic Node
+                  Voice Engine
                 </span>
               </div>
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  isMicActive ? 'bg-[#00C2FF] animate-ping' : 'bg-[#10B981]'
-                }`}
-              />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                Active
+              </span>
             </div>
             <p className="text-[11px] text-[#57423D] leading-snug">
-              Stream ready on edge cluster. Deterministic action inference under 850ms.
+              Zero-hallucination deterministic action routing connected to backend.
             </p>
-            <div className="flex items-center justify-between text-[10px] text-[#8B716B] font-mono pt-1 border-t border-[#FFE6DC]/60">
-              <span>Sample: 16-bit 48kHz</span>
-              <span className="text-[#A53B22] font-semibold">&lt;15ms Buffer</span>
-            </div>
+            <button
+              onClick={() => onNavigate('live-voice-playground')}
+              className="w-full mt-0.5 py-1.5 px-2.5 rounded-xl bg-[#FAF9F6] hover:bg-[#FFDAD2] text-[#A53B22] text-[11px] font-bold border border-[#FFE6DC] transition-colors flex items-center justify-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[14px]">mic</span>
+              <span>Test Live Voice</span>
+            </button>
           </div>
         </div>
       </aside>
@@ -227,13 +229,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Bottom Status & Sign Out */}
             <div className="pt-3 border-t border-[#FFE6DC]/60 flex flex-col gap-2 mt-4">
               <div className="p-2.5 rounded-xl bg-white border border-[#FFE6DC] flex items-center justify-between shadow-xs">
-                <div className="flex items-center gap-1.5 text-[#A53B22]">
-                  <span className="material-symbols-outlined text-[15px] animate-pulse">graphic_eq</span>
+                <div className="flex items-center gap-1.5 text-[#1D1A23]">
+                  <span className="material-symbols-outlined text-[15px] text-[#A53B22]">terminal</span>
                   <span className="font-['Outfit'] text-[10px] font-bold uppercase tracking-wider">
-                    Acoustic Node
+                    Voice Engine Active
                   </span>
                 </div>
-                <span className={`w-2 h-2 rounded-full ${isMicActive ? 'bg-[#00C2FF] animate-ping' : 'bg-[#10B981]'}`} />
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
               </div>
 
               {onLogout && (
